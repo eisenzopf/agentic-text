@@ -1,0 +1,7 @@
+{
+  "provider": "google",
+  "model": "gemini-2.0-flash",
+  "api_key_env_var": "GEMINI_API_KEY",
+  "max_tokens": 1024,
+  "temperature": 0.2
+} 

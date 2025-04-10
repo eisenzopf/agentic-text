@@ -5,18 +5,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
+	"google.golang.org/genai"
 )
 
 // GoogleProvider implements the Provider interface for Google's Vertex AI
 type GoogleProvider struct {
 	config Config
-	// client would typically be the Google API client
+	client *genai.Client
 }
 
 // NewGoogleProvider creates a new Google LLM provider
 func NewGoogleProvider(config Config) (*GoogleProvider, error) {
+	// Try to get API key from environment variable if not provided
 	if config.APIKey == "" {
-		return nil, errors.New("API key is required for Google provider")
+		config.APIKey = os.Getenv("GEMINI_API_KEY")
+		if config.APIKey == "" {
+			return nil, errors.New("API key is required for Google provider. Set it in config or GEMINI_API_KEY environment variable")
+		}
 	}
 
 	if config.Model == "" {
@@ -24,34 +32,70 @@ func NewGoogleProvider(config Config) (*GoogleProvider, error) {
 		config.Model = "gemini-1.0-pro"
 	}
 
+	// Initialize the Google GenAI client
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  config.APIKey,
+		Backend: genai.BackendGeminiAPI,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize Google GenAI client: %w", err)
+	}
+
 	return &GoogleProvider{
 		config: config,
-		// Initialize Google API client here
+		client: client,
 	}, nil
 }
 
 // Generate implements the Provider interface
 func (p *GoogleProvider) Generate(ctx context.Context, prompt string) (string, error) {
-	// In a real implementation, this would call the Google API
-	// This is a placeholder implementation
-	return fmt.Sprintf("Response to: %s", prompt), nil
+	// Call the GenerateContent method with the prompt
+	result, err := p.client.Models.GenerateContent(ctx, p.config.Model, genai.Text(prompt), nil)
+	if err != nil {
+		return "", fmt.Errorf("Google API generate error: %w", err)
+	}
+
+	// Extract and return the text response
+	return result.Text(), nil
 }
 
 // GenerateJSON implements the Provider interface
 func (p *GoogleProvider) GenerateJSON(ctx context.Context, prompt string, responseStruct interface{}) error {
-	// In a real implementation, this would:
-	// 1. Call the Google API with JSON mode enabled
-	// 2. Parse the response into the provided struct
-
-	// Placeholder implementation
-	_, err := p.Generate(ctx, prompt)
-	if err != nil {
-		return err
+	// First try to see if we're dealing with a simple struct we can handle with GenerateContent
+	// Create a system instruction that tells the model to respond with JSON
+	jsonInstruction := &genai.Content{
+		Parts: []*genai.Part{
+			{Text: "You are a helpful assistant that responds with valid JSON only. No explanations, just JSON."},
+		},
+		Role: "system",
 	}
 
-	// Pretend we got valid JSON
-	mockJSON := `{"result": "Success", "data": "Sample data"}`
-	return json.Unmarshal([]byte(mockJSON), responseStruct)
+	config := &genai.GenerateContentConfig{
+		SystemInstruction: jsonInstruction,
+	}
+
+	// Call the GenerateContent method with the JSON instruction
+	result, err := p.client.Models.GenerateContent(ctx, p.config.Model, genai.Text(prompt), config)
+	if err != nil {
+		return fmt.Errorf("Google API JSON generate error: %w", err)
+	}
+
+	// Extract the text response and parse it as JSON
+	jsonResponse := result.Text()
+
+	// Remove any markdown formatting if present (```json and ```)
+	jsonResponse = strings.TrimPrefix(jsonResponse, "```json")
+	jsonResponse = strings.TrimPrefix(jsonResponse, "```")
+	jsonResponse = strings.TrimSuffix(jsonResponse, "```")
+	jsonResponse = strings.TrimSpace(jsonResponse)
+
+	// Unmarshal the JSON response into the provided struct
+	if err := json.Unmarshal([]byte(jsonResponse), responseStruct); err != nil {
+		return fmt.Errorf("failed to unmarshal JSON response: %w", err)
+	}
+
+	return nil
 }
 
 // GetType implements the Provider interface
