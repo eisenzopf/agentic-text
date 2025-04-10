@@ -201,6 +201,98 @@ for i, result := range results {
 }
 ```
 
+### Creating Custom Processors
+
+You can extend Agentic-Text with custom processors for specialized text processing tasks. Here's how to create your own processor:
+
+```go
+// 1. Define your processor struct and result type
+type MyCustomProcessor struct {
+    processor.BaseProcessor
+}
+
+type MyCustomResult struct {
+    Value    string `json:"value"`
+    Score    float64 `json:"score"`
+    // Add other fields as needed
+}
+
+// 2. Create a constructor function
+func NewMyCustomProcessor(provider llm.Provider, options processor.Options) (*MyCustomProcessor, error) {
+    p := &MyCustomProcessor{}
+    
+    // Pass the processor itself as the implementations for required interfaces
+    base := processor.NewBaseProcessor("my-custom", provider, options, nil, p, p)
+    p.BaseProcessor = *base
+    
+    return p, nil
+}
+
+// 3. Implement the PromptGenerator interface
+func (p *MyCustomProcessor) GeneratePrompt(_ context.Context, text string) (string, error) {
+    return fmt.Sprintf(`Analyze the following text and extract specific information:
+Text: %s
+
+Respond with a JSON object containing:
+- "value": The primary value extracted from the text
+- "score": A confidence score from 0.0 to 1.0
+
+Format your response as valid JSON.`, text), nil
+}
+
+// 4. Implement the ResponseHandler interface
+func (p *MyCustomProcessor) HandleResponse(_ context.Context, text string, responseData interface{}) (*processor.Result, error) {
+    // Convert the response data to your result type
+    data, ok := responseData.(map[string]interface{})
+    if !ok {
+        return nil, fmt.Errorf("invalid response data format")
+    }
+    
+    // Extract fields from response data
+    value := ""
+    if v, ok := data["value"].(string); ok {
+        value = v
+    }
+    
+    score := 0.0
+    if s, ok := data["score"].(float64); ok {
+        score = s
+    }
+    
+    // Create your custom result
+    customResult := MyCustomResult{
+        Value: value,
+        Score: score,
+    }
+    
+    // Return the result
+    return &processor.Result{
+        Original:  text,
+        Processed: value, // Optional processed text
+        Data:      customResult,
+    }, nil
+}
+
+// 5. Register your processor
+func init() {
+    processor.Register("my-custom", func(provider llm.Provider, options processor.Options) (processor.Processor, error) {
+        return NewMyCustomProcessor(provider, options)
+    })
+}
+```
+
+By implementing the `PromptGenerator` and `ResponseHandler` interfaces, your processor can generate custom prompts for the LLM and handle the structured response data. You can also implement the `TextPreProcessor` interface for additional pre-processing steps.
+
+The processor framework automatically handles:
+- Text preprocessing
+- Prompt generation
+- LLM communication
+- Response parsing
+- Batch processing
+- Parallel execution
+
+For a complete example, see the [Custom Processor](./examples/custom_processor) example in the repository.
+
 ## Examples
 
 See the [examples](./examples) directory for more detailed examples:

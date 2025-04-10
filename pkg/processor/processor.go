@@ -31,6 +31,21 @@ type Options struct {
 	PostProcessOptions map[string]interface{}
 }
 
+// TextPreProcessor defines the interface for pre-processing text
+type TextPreProcessor interface {
+	PreProcess(ctx context.Context, text string) (string, error)
+}
+
+// PromptGenerator defines the interface for generating prompts
+type PromptGenerator interface {
+	GeneratePrompt(ctx context.Context, text string) (string, error)
+}
+
+// ResponseHandler defines the interface for handling LLM responses
+type ResponseHandler interface {
+	HandleResponse(ctx context.Context, text string, responseData interface{}) (*Result, error)
+}
+
 // Processor defines the interface for text processors
 type Processor interface {
 	// Process processes a single text item
@@ -49,19 +64,39 @@ type Processor interface {
 	GetName() string
 }
 
+// DefaultPreProcessor provides a default implementation that doesn't modify text
+type DefaultPreProcessor struct{}
+
+// PreProcess implements TextPreProcessor interface
+func (p *DefaultPreProcessor) PreProcess(_ context.Context, text string) (string, error) {
+	return text, nil
+}
+
 // BaseProcessor provides common functionality for processors
 type BaseProcessor struct {
-	name     string
-	provider llm.Provider
-	options  Options
+	name            string
+	provider        llm.Provider
+	options         Options
+	preProcessor    TextPreProcessor
+	promptGenerator PromptGenerator
+	responseHandler ResponseHandler
 }
 
 // NewBaseProcessor creates a new base processor
-func NewBaseProcessor(name string, provider llm.Provider, options Options) *BaseProcessor {
+func NewBaseProcessor(name string, provider llm.Provider, options Options,
+	preProc TextPreProcessor, promptGen PromptGenerator, respHandler ResponseHandler) *BaseProcessor {
+	// Use default pre-processor if none provided
+	if preProc == nil {
+		preProc = &DefaultPreProcessor{}
+	}
+
 	return &BaseProcessor{
-		name:     name,
-		provider: provider,
-		options:  options,
+		name:            name,
+		provider:        provider,
+		options:         options,
+		preProcessor:    preProc,
+		promptGenerator: promptGen,
+		responseHandler: respHandler,
 	}
 }
 
@@ -70,37 +105,16 @@ func (p *BaseProcessor) GetName() string {
 	return p.name
 }
 
-// PreProcess implements common pre-processing logic
-func (p *BaseProcessor) PreProcess(_ context.Context, text string) (string, error) {
-	// Default implementation returns the text unchanged
-	return text, nil
-}
-
-// PostProcess implements common post-processing logic
-func (p *BaseProcessor) PostProcess(_ context.Context, text string, responseData interface{}) (*Result, error) {
-	// Default implementation returns the text and data as-is
-	return &Result{
-		Processed: text,
-		Data:      responseData,
-	}, nil
-}
-
-// GeneratePrompt generates the prompt for the LLM
-func (p *BaseProcessor) GeneratePrompt(_ context.Context, text string) (string, error) {
-	// Simple default prompt for base implementation
-	return fmt.Sprintf("Process the following text: %s", text), nil
-}
-
 // Process processes a single text item
 func (p *BaseProcessor) Process(ctx context.Context, text string) (*Result, error) {
-	// Pre-process the text
-	processedText, err := p.PreProcess(ctx, text)
+	// Pre-process the text using injected preProcessor
+	processedText, err := p.preProcessor.PreProcess(ctx, text)
 	if err != nil {
 		return nil, fmt.Errorf("pre-processing error: %w", err)
 	}
 
-	// Generate the prompt using current implementation
-	prompt, err := p.GeneratePrompt(ctx, processedText)
+	// Generate the prompt using injected promptGenerator
+	prompt, err := p.promptGenerator.GeneratePrompt(ctx, processedText)
 	if err != nil {
 		return nil, fmt.Errorf("prompt generation error: %w", err)
 	}
@@ -112,8 +126,8 @@ func (p *BaseProcessor) Process(ctx context.Context, text string) (*Result, erro
 		return nil, fmt.Errorf("LLM error: %w", err)
 	}
 
-	// Post-process the result
-	result, err := p.PostProcess(ctx, processedText, responseData)
+	// Post-process using injected responseHandler
+	result, err := p.responseHandler.HandleResponse(ctx, processedText, responseData)
 	if err != nil {
 		return nil, fmt.Errorf("post-processing error: %w", err)
 	}

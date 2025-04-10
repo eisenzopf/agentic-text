@@ -18,7 +18,7 @@ type TextItem struct {
 
 // KeywordProcessor extracts keywords from text
 type KeywordProcessor struct {
-	*processor.BaseProcessor
+	processor.BaseProcessor
 }
 
 // KeywordResult contains the extracted keywords
@@ -30,13 +30,16 @@ type KeywordResult struct {
 
 // NewKeywordProcessor creates a new keyword processor
 func NewKeywordProcessor(provider llm.Provider, options processor.Options) (*KeywordProcessor, error) {
-	base := processor.NewBaseProcessor("keyword", provider, options)
-	return &KeywordProcessor{
-		BaseProcessor: base,
-	}, nil
+	p := &KeywordProcessor{}
+
+	// Pass the processor itself as the implementations for required interfaces
+	base := processor.NewBaseProcessor("keyword", provider, options, nil, p, p)
+	p.BaseProcessor = *base
+
+	return p, nil
 }
 
-// GeneratePrompt overrides the BaseProcessor's method
+// GeneratePrompt implements PromptGenerator interface
 func (p *KeywordProcessor) GeneratePrompt(_ context.Context, text string) (string, error) {
 	return fmt.Sprintf(`Extract the most important keywords from the following text:
 Text: %s
@@ -49,8 +52,8 @@ Respond with a JSON object containing:
 Format your response as valid JSON.`, text), nil
 }
 
-// PostProcess overrides the BaseProcessor's method
-func (p *KeywordProcessor) PostProcess(_ context.Context, text string, responseData interface{}) (*processor.Result, error) {
+// HandleResponse implements ResponseHandler interface
+func (p *KeywordProcessor) HandleResponse(_ context.Context, text string, responseData interface{}) (*processor.Result, error) {
 	// Convert the response data to KeywordResult
 	data, ok := responseData.(map[string]interface{})
 	if !ok {
