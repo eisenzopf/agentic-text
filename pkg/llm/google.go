@@ -62,7 +62,6 @@ func (p *GoogleProvider) Generate(ctx context.Context, prompt string) (string, e
 
 // GenerateJSON implements the Provider interface
 func (p *GoogleProvider) GenerateJSON(ctx context.Context, prompt string, responseStruct interface{}) error {
-	// First try to see if we're dealing with a simple struct we can handle with GenerateContent
 	// Create a system instruction that tells the model to respond with JSON
 	jsonInstruction := &genai.Content{
 		Parts: []*genai.Part{
@@ -90,7 +89,16 @@ func (p *GoogleProvider) GenerateJSON(ctx context.Context, prompt string, respon
 	jsonResponse = strings.TrimSuffix(jsonResponse, "```")
 	jsonResponse = strings.TrimSpace(jsonResponse)
 
-	// Unmarshal the JSON response into the provided struct
+	// If debug is enabled, wrap the response with debug info
+	if p.config.IsDebugEnabled() {
+		// The prompt parameter contains the full interpolated prompt
+		if err := WrapWithDebugInfo(ctx, p.config, prompt, jsonResponse, responseStruct); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Normal behavior (no debug)
 	if err := json.Unmarshal([]byte(jsonResponse), responseStruct); err != nil {
 		return fmt.Errorf("failed to unmarshal JSON response: %w", err)
 	}

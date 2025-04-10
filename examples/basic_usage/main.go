@@ -28,6 +28,8 @@ func main() {
 	processorType := flag.String("processor", "sentiment", "The type of processor to use (sentiment, etc.)")
 	batchMode := flag.Bool("batch", false, "Process multiple text inputs as a batch")
 	configPath := flag.String("config", "config.json", "Path to the configuration file")
+	verbose := flag.Bool("verbose", false, "Show LLM input and output for debugging")
+	showPrompt := flag.Bool("show-prompt", true, "Show the actual prompt template being used")
 
 	// Config overrides
 	providerFlag := flag.String("provider", "", "Override the LLM provider in config.json")
@@ -91,12 +93,19 @@ func main() {
 		log.Fatalf("Error: Environment variable %s not set or empty", config.APIKeyEnvVar)
 	}
 
-	// Initialize LLM provider
+	// Create provider options to capture debug info if verbose is enabled
+	providerOptions := map[string]interface{}{}
+	if *verbose {
+		providerOptions["debug"] = true
+	}
+
+	// Update provider config with options
 	providerConfig := llm.Config{
 		APIKey:      apiKey,
 		Model:       config.Model,
 		MaxTokens:   config.MaxTokens,
 		Temperature: config.Temperature,
+		Options:     providerOptions,
 	}
 
 	// Map string provider to provider type
@@ -128,6 +137,23 @@ func main() {
 		log.Fatalf("Failed to get processor: %v", err)
 	}
 
+	// Only show the prompt template if explicitly requested AND verbose is not enabled
+	if *showPrompt && !*verbose {
+		// Create a context with our processor name for debugging
+		dummyText := "SAMPLE_TEXT"
+		ctx := context.Background()
+
+		// Try to get the template by calling GeneratePrompt
+		if sentimentProc, ok := proc.(*processor.SentimentProcessor); ok {
+			prompt, _ := sentimentProc.GeneratePrompt(ctx, dummyText)
+			fmt.Println("\n=== PROMPT TEMPLATE ===")
+			fmt.Println(strings.Replace(prompt, dummyText, "<INPUT_TEXT>", 1))
+			fmt.Println("=== END PROMPT TEMPLATE ===\n")
+		} else {
+			fmt.Println("Note: Prompt template is not available for this processor type")
+		}
+	}
+
 	if *batchMode {
 		// Process all inputs as a batch
 		source := data.NewStringsSource(args)
@@ -149,8 +175,43 @@ func main() {
 
 			fmt.Printf("\nText %d: %s\n", i+1, origText)
 
+			// Print debug info if verbose mode is enabled
+			if *verbose && result.Data != nil {
+				if debugInfo, ok := result.Data.(map[string]interface{})["debug"]; ok {
+					if debug, ok := debugInfo.(map[string]interface{}); ok {
+						// Show only the prompt and raw response
+						fmt.Println("\n=== LLM INPUT ===")
+						if prompt, ok := debug["prompt"].(string); ok {
+							fmt.Println(prompt)
+						}
+						fmt.Println("=== END LLM INPUT ===\n")
+
+						fmt.Println("=== LLM OUTPUT ===")
+						if rawResponse, ok := debug["raw_response"].(string); ok {
+							fmt.Println(rawResponse)
+						}
+						fmt.Println("=== END LLM OUTPUT ===\n")
+					}
+				}
+			}
+
 			// Pretty print the data
-			jsonData, _ := json.MarshalIndent(result.Data, "", "  ")
+			outputData := result.Data
+			// Remove debug info from output if it was already shown
+			if *verbose {
+				if resultMap, ok := outputData.(map[string]interface{}); ok {
+					// Create a copy without the debug field
+					cleanData := make(map[string]interface{})
+					for k, v := range resultMap {
+						if k != "debug" {
+							cleanData[k] = v
+						}
+					}
+					outputData = cleanData
+				}
+			}
+
+			jsonData, _ := json.MarshalIndent(outputData, "", "  ")
 			fmt.Println(string(jsonData))
 		}
 	} else {
@@ -161,8 +222,45 @@ func main() {
 			log.Fatalf("Processing failed: %v", err)
 		}
 
-		// Print the result as JSON
-		jsonData, _ := json.MarshalIndent(result.Data, "", "  ")
+		// Print debug info if verbose mode is enabled
+		if *verbose {
+			if debugData, ok := result.Data.(map[string]interface{}); ok && debugData["debug"] != nil {
+				if debug, ok := debugData["debug"].(map[string]interface{}); ok {
+					// Show only the prompt and raw response
+					fmt.Println("\n=== LLM INPUT ===")
+					if prompt, ok := debug["prompt"].(string); ok {
+						fmt.Println(prompt)
+					}
+					fmt.Println("=== END LLM INPUT ===\n")
+
+					fmt.Println("=== LLM OUTPUT ===")
+					if rawResponse, ok := debug["raw_response"].(string); ok {
+						fmt.Println(rawResponse)
+					}
+					fmt.Println("=== END LLM OUTPUT ===\n")
+				}
+			} else {
+				fmt.Println("No debug information available")
+			}
+		}
+
+		// Print the result as JSON (final processed result)
+		outputData := result.Data
+		// Remove debug info from output
+		if *verbose {
+			if resultMap, ok := outputData.(map[string]interface{}); ok {
+				// Create a copy without the debug field
+				cleanData := make(map[string]interface{})
+				for k, v := range resultMap {
+					if k != "debug" {
+						cleanData[k] = v
+					}
+				}
+				outputData = cleanData
+			}
+		}
+
+		jsonData, _ := json.MarshalIndent(outputData, "", "  ")
 		fmt.Println(string(jsonData))
 	}
 }

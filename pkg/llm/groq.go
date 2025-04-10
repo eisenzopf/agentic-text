@@ -51,6 +51,15 @@ func (p *GroqProvider) GenerateJSON(ctx context.Context, prompt string, response
 
 	// Pretend we got valid JSON
 	mockJSON := `{"result": "Success", "data": "Sample data from Groq"}`
+
+	// If debug is enabled, wrap the response with debug info
+	if p.config.IsDebugEnabled() {
+		if err := WrapWithDebugInfo(ctx, p.config, prompt, mockJSON, responseStruct); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	return json.Unmarshal([]byte(mockJSON), responseStruct)
 }
 

@@ -85,6 +85,12 @@ func (p *BaseProcessor) PostProcess(_ context.Context, text string, responseData
 	}, nil
 }
 
+// GeneratePrompt generates the prompt for the LLM
+func (p *BaseProcessor) GeneratePrompt(_ context.Context, text string) (string, error) {
+	// Simple default prompt for base implementation
+	return fmt.Sprintf("Process the following text: %s", text), nil
+}
+
 // Process processes a single text item
 func (p *BaseProcessor) Process(ctx context.Context, text string) (*Result, error) {
 	// Pre-process the text
@@ -93,7 +99,7 @@ func (p *BaseProcessor) Process(ctx context.Context, text string) (*Result, erro
 		return nil, fmt.Errorf("pre-processing error: %w", err)
 	}
 
-	// Generate the prompt
+	// Generate the prompt using current implementation
 	prompt, err := p.GeneratePrompt(ctx, processedText)
 	if err != nil {
 		return nil, fmt.Errorf("prompt generation error: %w", err)
@@ -116,12 +122,6 @@ func (p *BaseProcessor) Process(ctx context.Context, text string) (*Result, erro
 	result.Original = text
 
 	return result, nil
-}
-
-// GeneratePrompt generates the prompt for the LLM
-func (p *BaseProcessor) GeneratePrompt(_ context.Context, text string) (string, error) {
-	// This should be overridden by concrete implementations
-	return fmt.Sprintf("Process the following text: %s", text), nil
 }
 
 // ProcessItem processes a data.TextItem
