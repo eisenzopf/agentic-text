@@ -29,7 +29,6 @@ func main() {
 	batchMode := flag.Bool("batch", false, "Process multiple text inputs as a batch")
 	configPath := flag.String("config", "config.json", "Path to the configuration file")
 	verbose := flag.Bool("verbose", false, "Show LLM input and output for debugging")
-	showPrompt := flag.Bool("show-prompt", true, "Show the actual prompt template being used")
 
 	// Config overrides
 	providerFlag := flag.String("provider", "", "Override the LLM provider in config.json")
@@ -137,8 +136,8 @@ func main() {
 		log.Fatalf("Failed to get processor: %v", err)
 	}
 
-	// Only show the prompt template if explicitly requested AND verbose is not enabled
-	if *showPrompt && !*verbose {
+	// Only show the prompt template if verbose is enabled
+	if *verbose {
 		// Create a context with our processor name for debugging
 		dummyText := "SAMPLE_TEXT"
 		ctx := context.Background()
@@ -148,7 +147,7 @@ func main() {
 			prompt, _ := sentimentProc.GeneratePrompt(ctx, dummyText)
 			fmt.Println("\n=== PROMPT TEMPLATE ===")
 			fmt.Println(strings.Replace(prompt, dummyText, "<INPUT_TEXT>", 1))
-			fmt.Println("=== END PROMPT TEMPLATE ===\n")
+			fmt.Println("=== END PROMPT TEMPLATE ===")
 		} else {
 			fmt.Println("Note: Prompt template is not available for this processor type")
 		}
@@ -184,13 +183,12 @@ func main() {
 						if prompt, ok := debug["prompt"].(string); ok {
 							fmt.Println(prompt)
 						}
-						fmt.Println("=== END LLM INPUT ===\n")
-
+						fmt.Println("=== END LLM INPUT ===")
 						fmt.Println("=== LLM OUTPUT ===")
 						if rawResponse, ok := debug["raw_response"].(string); ok {
 							fmt.Println(rawResponse)
 						}
-						fmt.Println("=== END LLM OUTPUT ===\n")
+						fmt.Println("=== END LLM OUTPUT ===")
 					}
 				}
 			}
@@ -231,13 +229,13 @@ func main() {
 					if prompt, ok := debug["prompt"].(string); ok {
 						fmt.Println(prompt)
 					}
-					fmt.Println("=== END LLM INPUT ===\n")
+					fmt.Println("=== END LLM INPUT ===")
 
 					fmt.Println("=== LLM OUTPUT ===")
 					if rawResponse, ok := debug["raw_response"].(string); ok {
 						fmt.Println(rawResponse)
 					}
-					fmt.Println("=== END LLM OUTPUT ===\n")
+					fmt.Println("=== END LLM OUTPUT ===")
 				}
 			} else {
 				fmt.Println("No debug information available")

@@ -68,8 +68,8 @@ A Go library for LLM-powered text processing with pluggable models and data sour
    ```json
    {
      "provider": "google",
-     "model": "gemini-pro",
-     "api_key_env_var": "GOOGLE_API_KEY",
+     "model": "gemini-2.0-flash",
+     "api_key_env_var": "GEMINI_API_KEY",
      "max_tokens": 1024,
      "temperature": 0.2
    }
@@ -91,25 +91,37 @@ package main
 import (
     "fmt"
     "context"
+    "log"
     
     "github.com/eisenzopf/agentic-text/pkg/llm"
     "github.com/eisenzopf/agentic-text/pkg/processor"
 )
 
 func main() {
+    // Initialize LLM provider with configuration options
+    config := llm.Config{
+        APIKey:      "your-api-key", // Use environment variables in production
+        Model:       "gemini-2.0-flash",  // Model name varies by provider
+        MaxTokens:   1024,           // Maximum tokens in response
+        Temperature: 0.2,            // Lower for more deterministic outputs
+    }
+    
     // Initialize an LLM provider
-    provider, err := llm.NewProvider("google")
+    provider, err := llm.NewProvider(llm.Google, config)
     if err != nil {
-        panic(err)
+        log.Fatalf("Failed to initialize provider: %v", err)
     }
     
     // Create a processor using the provider
-    sentimentProcessor := processor.GetProcessor("sentiment", provider)
+    sentimentProcessor, err := processor.GetProcessor("sentiment", provider, processor.Options{})
+    if err != nil {
+        log.Fatalf("Failed to get processor: %v", err)
+    }
     
     // Process a text sample
     result, err := sentimentProcessor.Process(context.Background(), "I really enjoyed this product!")
     if err != nil {
-        panic(err)
+        log.Fatalf("Processing failed: %v", err)
     }
     
     fmt.Println(result)
@@ -124,12 +136,12 @@ func main() {
 // Initialize LLM provider with configuration options
 config := llm.Config{
     APIKey:      "your-api-key", // Use environment variables in production
-    Model:       "gemini-pro",   // Model name varies by provider
+    Model:       "gemini-2.0-flash",  // Model name varies by provider
     MaxTokens:   1024,           // Maximum tokens in response
     Temperature: 0.2,            // Lower for more deterministic outputs
 }
 
-// Create a provider (supported providers: Google, Amazon, Groq, etc.)
+// Create a provider (supported providers: Google, Amazon, Groq, OpenAI)
 provider, err := llm.NewProvider(llm.Google, config)
 if err != nil {
     log.Fatalf("Failed to initialize provider: %v", err)
