@@ -17,10 +17,6 @@ type AttributeProcessor struct {
 type AttributeResult struct {
 	// Attributes is an array of extracted attributes
 	Attributes []Attribute `json:"attributes"`
-	// Confidence is the confidence level (0.0 to 1.0)
-	Confidence float64 `json:"confidence"`
-	// Explanation provides context for the extracted attributes
-	Explanation string `json:"explanation"`
 }
 
 // Attribute represents a single extracted attribute
@@ -78,9 +74,7 @@ func (p *AttributeProcessor) GeneratePrompt(ctx context.Context, text string) (s
       "explanation": "..."
     },
     ...
-  ],
-  "confidence": 0.0,
-  "explanation": "..."
+  ]
 }`, text), nil
 }
 
@@ -114,15 +108,9 @@ func (p *AttributeProcessor) HandleResponse(ctx context.Context, text string, re
 		}
 	}
 
-	// Extract overall confidence and explanation
-	confidence, _ := data["confidence"].(float64)
-	explanation, _ := data["explanation"].(string)
-
 	// Create result map
 	resultMap := map[string]interface{}{
-		"attributes":  attributes,
-		"confidence":  confidence,
-		"explanation": explanation,
+		"attributes": attributes,
 	}
 
 	// Add debug info back if it existed
