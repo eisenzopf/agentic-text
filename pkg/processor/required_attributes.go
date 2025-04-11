@@ -17,8 +17,7 @@ type AttributeDefinition struct {
 
 // RequiredAttributesConfig holds configuration for the RequiredAttributesProcessor
 type RequiredAttributesConfig struct {
-	Questions          []string
-	ExistingAttributes []string
+	Text string
 }
 
 // RequiredAttributesPromptGenerator generates prompts for attribute definition
@@ -27,24 +26,8 @@ type RequiredAttributesPromptGenerator struct {
 }
 
 // GeneratePrompt implements the PromptGenerator interface
-func (pg *RequiredAttributesPromptGenerator) GeneratePrompt(ctx context.Context, text string) (string, error) {
-	// Format questions for the prompt
-	questionsText := ""
-	for i, q := range pg.config.Questions {
-		questionsText += fmt.Sprintf("%d. %s\n", i+1, q)
-	}
-
-	// Format existing attributes if provided
-	existingText := ""
-	if len(pg.config.ExistingAttributes) > 0 {
-		existingText = "\nExisting attributes:\n"
-		for _, attr := range pg.config.ExistingAttributes {
-			existingText += fmt.Sprintf("- %s\n", attr)
-		}
-	}
-
-	prompt := fmt.Sprintf(`We need to determine what data attributes are required to answer these questions:
-%s
+func (pg *RequiredAttributesPromptGenerator) GeneratePrompt(ctx context.Context, _ string) (string, error) {
+	prompt := fmt.Sprintf(`We need to determine what data attributes are required to answer this question:
 %s
 
 Return a JSON object with this structure:
@@ -57,7 +40,7 @@ Return a JSON object with this structure:
       "rationale": str    // Why this attribute is needed for the questions
     }
   ]
-}`, questionsText, existingText)
+}`, pg.config.Text)
 
 	return prompt, nil
 }
@@ -133,10 +116,8 @@ func NewRequiredAttributesProcessor(provider llm.Provider, config RequiredAttrib
 
 // Process overrides the default process method to handle the empty text case
 func (p *RequiredAttributesProcessor) Process(ctx context.Context, text string) (*Result, error) {
-	// Validate request
-	if len(p.config.Questions) == 0 {
-		return nil, fmt.Errorf("questions are required")
-	}
+	// Update the config with the input text
+	p.config.Text = text
 
 	// Use the base processor implementation
 	return p.BaseProcessor.Process(ctx, text)
@@ -168,4 +149,15 @@ func getString(m map[string]interface{}, key string) string {
 		}
 	}
 	return ""
+}
+
+// Register the processor with the registry
+func init() {
+	Register("required_attributes", func(provider llm.Provider, options Options) (Processor, error) {
+		// Create default config
+		config := RequiredAttributesConfig{
+			Text: "",
+		}
+		return NewRequiredAttributesProcessor(provider, config, options), nil
+	})
 }

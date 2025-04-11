@@ -136,23 +136,6 @@ func main() {
 		log.Fatalf("Failed to get processor: %v", err)
 	}
 
-	// Only show the prompt template if verbose is enabled
-	if *verbose {
-		// Create a context with our processor name for debugging
-		dummyText := "SAMPLE_TEXT"
-		ctx := context.Background()
-
-		// Try to get the template by calling GeneratePrompt
-		if sentimentProc, ok := proc.(*processor.SentimentProcessor); ok {
-			prompt, _ := sentimentProc.GeneratePrompt(ctx, dummyText)
-			fmt.Println("\n=== PROMPT TEMPLATE ===")
-			fmt.Println(strings.Replace(prompt, dummyText, "<INPUT_TEXT>", 1))
-			fmt.Println("=== END PROMPT TEMPLATE ===")
-		} else {
-			fmt.Println("Note: Prompt template is not available for this processor type")
-		}
-	}
-
 	if *batchMode {
 		// Process all inputs as a batch
 		source := data.NewStringsSource(args)
