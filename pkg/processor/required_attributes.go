@@ -15,50 +15,82 @@ type AttributeDefinition struct {
 	Rationale   string `json:"rationale"`   // Why this attribute is needed
 }
 
-// RequiredAttributesConfig holds configuration for the RequiredAttributesProcessor
-type RequiredAttributesConfig struct {
-	Text string
+// RequiredAttributesProcessor generates required attributes based on questions
+type RequiredAttributesProcessor struct {
+	// Embed BaseProcessor to inherit all methods
+	BaseProcessor
 }
 
-// RequiredAttributesPromptGenerator generates prompts for attribute definition
-type RequiredAttributesPromptGenerator struct {
-	config RequiredAttributesConfig
+// NewRequiredAttributesProcessor creates a new RequiredAttributesProcessor
+func NewRequiredAttributesProcessor(provider llm.Provider, options Options) (*RequiredAttributesProcessor, error) {
+	p := &RequiredAttributesProcessor{}
+
+	// Create and embed base processor
+	base := NewBaseProcessor("required_attributes", provider, options, nil, p, p)
+	p.BaseProcessor = *base
+
+	return p, nil
 }
 
-// GeneratePrompt implements the PromptGenerator interface
-func (pg *RequiredAttributesPromptGenerator) GeneratePrompt(ctx context.Context, _ string) (string, error) {
-	prompt := fmt.Sprintf(`We need to determine what data attributes are required to answer this question:
+// GeneratePrompt implements PromptGenerator interface - generates the attribute analysis prompt
+func (p *RequiredAttributesProcessor) GeneratePrompt(ctx context.Context, text string) (string, error) {
+	return fmt.Sprintf(`**Role:** You are an expert data analyst that ONLY outputs valid JSON.
+
+**Objective:** Analyze the provided questions and determine what data attributes would be required to answer them accurately.
+
+**Input Questions:**
 %s
 
-Return a JSON object with this structure:
+**Instructions:**
+1. Carefully read and interpret the Input Questions.
+2. Identify all data attributes needed to answer these questions.
+3. For each attribute, provide:
+   - A machine-readable field name in snake_case
+   - A human-readable title
+   - A clear description of what the attribute represents
+   - A rationale explaining why this attribute is needed
+4. Format your entire output as a single, valid JSON object conforming to the structure below.
+5. *** IMPORTANT: Your ENTIRE response must be a single JSON object, without ANY additional text, explanation, or markdown formatting. ***
+
+**Required JSON Output Structure:**
 {
   "attributes": [
     {
-      "field_name": str,  // Database field name in snake_case
-      "title": str,       // Human readable title
-      "description": str, // Detailed description of the attribute
-      "rationale": str    // Why this attribute is needed for the questions
+      "field_name": "example_field",  // Database field name in snake_case
+      "title": "Example Field",       // Human readable title
+      "description": "Description of what this field represents",
+      "rationale": "Why this field is needed to answer the questions"
     }
   ]
-}`, pg.config.Text)
-
-	return prompt, nil
+}`, text), nil
 }
 
-// RequiredAttributesResponseHandler handles responses from the LLM
-type RequiredAttributesResponseHandler struct{}
-
-// HandleResponse implements the ResponseHandler interface
-func (rh *RequiredAttributesResponseHandler) HandleResponse(ctx context.Context, text string, responseData interface{}) (*Result, error) {
-	// Validate response format
-	resultMap, ok := responseData.(map[string]interface{})
+// HandleResponse implements ResponseHandler interface - handles the LLM response
+func (p *RequiredAttributesProcessor) HandleResponse(ctx context.Context, text string, responseData interface{}) (*Result, error) {
+	// Convert the response data to map
+	data, ok := responseData.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("unexpected result format")
+		return nil, fmt.Errorf("invalid response data format")
 	}
 
-	attributesRaw, ok := resultMap["attributes"].([]interface{})
+	// Check if debug info exists and preserve it
+	var debugInfo interface{}
+	if debug, exists := data["debug"]; exists {
+		debugInfo = debug
+	}
+
+	// Extract attributes
+	attributesRaw, ok := data["attributes"].([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("attributes field is not an array")
+		// Create a default attribute if none are found
+		attributesRaw = []interface{}{
+			map[string]interface{}{
+				"field_name":  "unknown",
+				"title":       "Unknown",
+				"description": "Unable to determine required attributes from the response",
+				"rationale":   "The response did not contain valid attribute definitions",
+			},
+		}
 	}
 
 	// Convert to strongly typed attributes
@@ -82,63 +114,21 @@ func (rh *RequiredAttributesResponseHandler) HandleResponse(ctx context.Context,
 		}
 	}
 
+	// Create result map with attributes
+	resultMap := map[string]interface{}{
+		"attributes": attributes,
+	}
+
+	// Add debug info back if it existed
+	if debugInfo != nil {
+		resultMap["debug"] = debugInfo
+	}
+
 	return &Result{
+		Original:  text,
 		Processed: text,
-		Data:      attributes,
+		Data:      resultMap,
 	}, nil
-}
-
-// RequiredAttributesProcessor generates required attributes based on questions
-type RequiredAttributesProcessor struct {
-	*BaseProcessor
-	config RequiredAttributesConfig
-}
-
-// NewRequiredAttributesProcessor creates a new RequiredAttributesProcessor
-func NewRequiredAttributesProcessor(provider llm.Provider, config RequiredAttributesConfig, options Options) *RequiredAttributesProcessor {
-	promptGen := &RequiredAttributesPromptGenerator{config: config}
-	respHandler := &RequiredAttributesResponseHandler{}
-
-	baseProcessor := NewBaseProcessor(
-		"required_attributes",
-		provider,
-		options,
-		&DefaultPreProcessor{},
-		promptGen,
-		respHandler,
-	)
-
-	return &RequiredAttributesProcessor{
-		BaseProcessor: baseProcessor,
-		config:        config,
-	}
-}
-
-// Process overrides the default process method to handle the empty text case
-func (p *RequiredAttributesProcessor) Process(ctx context.Context, text string) (*Result, error) {
-	// Update the config with the input text
-	p.config.Text = text
-
-	// Use the base processor implementation
-	return p.BaseProcessor.Process(ctx, text)
-}
-
-// GetAttributes returns the attribute definitions from the result
-func GetAttributes(result *Result) ([]AttributeDefinition, error) {
-	if result == nil {
-		return nil, fmt.Errorf("result is nil")
-	}
-
-	if result.Error != nil {
-		return nil, result.Error
-	}
-
-	attributes, ok := result.Data.([]AttributeDefinition)
-	if !ok {
-		return nil, fmt.Errorf("result data is not of type []AttributeDefinition")
-	}
-
-	return attributes, nil
 }
 
 // Helper function to extract string values from maps
@@ -154,10 +144,6 @@ func getString(m map[string]interface{}, key string) string {
 // Register the processor with the registry
 func init() {
 	Register("required_attributes", func(provider llm.Provider, options Options) (Processor, error) {
-		// Create default config
-		config := RequiredAttributesConfig{
-			Text: "",
-		}
-		return NewRequiredAttributesProcessor(provider, config, options), nil
+		return NewRequiredAttributesProcessor(provider, options)
 	})
 }

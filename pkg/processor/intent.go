@@ -73,12 +73,34 @@ func (p *IntentProcessor) HandleResponse(ctx context.Context, text string, respo
 		debugInfo = debug
 	}
 
-	// Extract intent fields
+	// Check if we got a non-JSON response wrapped in a "response" field
+	if response, exists := data["response"]; exists && len(data) <= 2 { // data has only response and maybe debug
+		// This is a fallback case where the LLM didn't produce valid JSON
+		resultMap := map[string]interface{}{
+			"label_name":  "Unclear Intent",
+			"label":       "unclear_intent",
+			"description": "The conversation transcript is unclear or does not contain a discernible customer service request.",
+			"response":    response,
+		}
+
+		// Add debug info back if it existed
+		if debugInfo != nil {
+			resultMap["debug"] = debugInfo
+		}
+
+		return &Result{
+			Original:  text,
+			Processed: text,
+			Data:      resultMap,
+		}, nil
+	}
+
+	// Extract intent fields with defaults
 	labelName, _ := data["label_name"].(string)
 	label, _ := data["label"].(string)
 	description, _ := data["description"].(string)
 
-	// Set default if missing
+	// Set defaults if missing
 	if labelName == "" || label == "" {
 		labelName = "Unclear Intent"
 		label = "unclear_intent"
