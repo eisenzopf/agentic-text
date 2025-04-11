@@ -102,10 +102,10 @@ func (p *RequiredAttributesProcessor) HandleResponse(ctx context.Context, text s
 		}
 
 		attr := AttributeDefinition{
-			FieldName:   getString(attrMap, "field_name"),
-			Title:       getString(attrMap, "title"),
-			Description: getString(attrMap, "description"),
-			Rationale:   getString(attrMap, "rationale"),
+			FieldName:   attrMap["field_name"].(string),
+			Title:       attrMap["title"].(string),
+			Description: attrMap["description"].(string),
+			Rationale:   attrMap["rationale"].(string),
 		}
 
 		// Only add if field_name is valid
@@ -129,16 +129,6 @@ func (p *RequiredAttributesProcessor) HandleResponse(ctx context.Context, text s
 		Processed: text,
 		Data:      resultMap,
 	}, nil
-}
-
-// Helper function to extract string values from maps
-func getString(m map[string]interface{}, key string) string {
-	if val, ok := m[key]; ok {
-		if strVal, ok := val.(string); ok {
-			return strVal
-		}
-	}
-	return ""
 }
 
 // Register the processor with the registry
