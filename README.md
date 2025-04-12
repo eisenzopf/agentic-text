@@ -4,100 +4,209 @@ A Go library for LLM-powered text processing with pluggable models and data sour
 
 ## Features
 
-- **LLM Abstraction**: Support for multiple providers (Google, OpenAI)
+- **Simple API**: One-liner functions for common text processing operations through the `easy` package
+- **LLM Abstraction**: Support for multiple providers (Google, OpenAI, Groq, Amazon)
 - **Data Source Abstraction**: Process text from multiple sources with automatic batching
+- **Parallel Processing**: Configurable parallelism and batch size
 - **Processor Framework**: Standard interface for text processing operations
 - **Extensible Architecture**: Easily add custom processors for specific tasks
-- **Parallel Processing**: Configurable parallelism and batch size
 - **Standardized Data Containers**: Unified ProcessItem structure for different content types
 - **Processing History**: Tracking of processing steps and metadata preservation
 
+## Installation
+
+```bash
+go get github.com/eisenzopf/agentic-text
+```
+
 ## Quick Start
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/eisenzopf/agentic-text.git
-   cd agentic-text
-   ```
-
-2. Set up your API key environment variable:
+1. Set up your API key environment variable:
    ```bash
    # For Google's Gemini model
    export GEMINI_API_KEY=your_api_key_here
    
    # For OpenAI
    export OPENAI_API_KEY=your_api_key_here
+   
+   # For other supported providers
+   export GROQ_API_KEY=your_api_key_here
+   export AMAZON_API_KEY=your_api_key_here
    ```
 
-3. Run the basic example:
-   ```bash
-    cd examples/basic_usage
-    go run main.go "I absolutely love this product!"
-   ```
+2. Use the library in your Go code:
+   ```go
+   package main
 
-4. Try different processors:
-   ```bash
-   # The default processor is "sentiment" if not specified
-   go run main.go -processor=sentiment "I absolutely love this product!"
-   
-   # Use other processors as they become available in the library
-   go run main.go -processor=summarization "Long text to summarize..."
-   go run main.go -processor=classification "Text to classify..."
-   ```
+   import (
+       "fmt"
+       "github.com/eisenzopf/agentic-text/pkg/easy"
+   )
 
-5. Try batch processing multiple texts:
-   ```bash
-   go run main.go -batch "I'm really disappointed with this service." "The product is okay." "This is the best experience I've ever had!"
-   ```
-
-6. Try the ProcessItem-based approach:
-   ```bash
-   cd examples/processitem_usage
-   go run main.go "This is a test of the ProcessItem approach"
-   
-   # Chain multiple processors together
-   go run main.go -secondary=intent "I'm very disappointed with your service. I want to cancel my subscription immediately."
-   ```
-
-7. Override configuration parameters from the command line:
-   ```bash
-   # Override the provider and model
-   go run main.go -provider=openai -model=gpt-3.5-turbo "Analyze this text"
-   
-   # Change the temperature
-   go run main.go -temperature=0.7 "I need more creative results"
-   
-   # Use a different API key environment variable
-   go run main.go -api-key-env=MY_CUSTOM_API_KEY "Test with different credentials"
-   
-   # Enable verbose mode to see LLM prompt and responses
-   go run main.go -verbose "Show me the LLM prompt and response"
-   
-   # Combine multiple overrides
-   go run main.go -provider=openai -model=gpt-4 -temperature=0.9 -max-tokens=2048 "Complex analysis needed"
-   ```
-
-8. Customize configuration:
-   Edit the `config.json` file to change provider, model, or other settings:
-   ```json
-   {
-     "provider": "google",
-     "model": "gemini-2.0-flash",
-     "api_key_env_var": "GEMINI_API_KEY",
-     "max_tokens": 1024,
-     "temperature": 0.2
+   func main() {
+       fmt.Println(easy.Sentiment("I absolutely love this product"))
    }
    ```
 
-## Getting Started
+3. Alternatively, try the example app:
+   ```bash
+   cd agentic-text/examples/easy_usage
+   go run main.go sentiment "I absolutely love this product"
+   
+   # Try different processors
+   go run main.go intent "I want to cancel my subscription"
+   ```
 
-### Installation
+## Simple Usage (Recommended)
 
-```bash
-go get github.com/eisenzopf/agentic-text
+The `easy` package provides a simplified interface for common operations with sensible defaults. This is the recommended approach for most users.
+
+### One-line Functions
+
+Process text with a single function call:
+
+```go
+// Sentiment analysis
+result, err := easy.Sentiment("I absolutely love this product")
+if err != nil {
+    fmt.Println("Sentiment analysis failed:", err)
+    return
+}
+
+// Intent analysis
+result, err := easy.Intent("I want to cancel my subscription immediately")
+if err != nil {
+    fmt.Println("Intent analysis failed:", err)
+    return
+}
+
+// Generic processor function
+result, err := easy.ProcessText("Extract customer needs from this text", "required_attributes")
+if err != nil {
+    fmt.Println("Processing failed:", err)
+    return
+}
+
+// Pretty print the result
+jsonStr, _ := easy.PrettyPrint(result)
+fmt.Println(jsonStr)
 ```
 
-### Quick Example
+### Batch Processing
+
+Process multiple texts in parallel:
+
+```go
+// Define inputs
+inputs := []string{
+    "I am very disappointed with this service",
+    "The product is okay, but nothing special",
+    "This is the best experience I have ever had",
+}
+
+// Process in parallel (with concurrency of 2)
+results, err := easy.ProcessBatchText(inputs, "sentiment", 2)
+if err != nil {
+    fmt.Println("Batch processing failed:", err)
+    return
+}
+
+// Process results
+for i, result := range results {
+    prettyJSON, _ := easy.PrettyPrint(result)
+    fmt.Printf("Result for input %d:\n%s\n", i+1, prettyJSON)
+}
+```
+
+### Custom Configuration
+
+Configure the processor with your own settings:
+
+```go
+package main
+
+import (
+    "fmt"
+    
+    "github.com/eisenzopf/agentic-text/pkg/easy"
+    "github.com/eisenzopf/agentic-text/pkg/llm"
+)
+
+func main() {
+    // Define custom configuration
+    config := &easy.Config{
+        Provider:    llm.OpenAI,               // Choose provider: llm.Google, llm.OpenAI, llm.Groq, llm.Amazon
+        Model:       "gpt-4",                  // Model name varies by provider
+        MaxTokens:   512,                      // Maximum tokens in response
+        Temperature: 0.7,                      // Higher for more creative outputs
+        Debug:       true,                     // Include debug info in results
+        Options:     map[string]interface{}{}, // Additional provider-specific options
+    }
+    
+    // Use the one-liner with custom config
+    result, err := easy.ProcessTextWithConfig(
+        "I absolutely love this product", 
+        "sentiment", 
+        config,
+    )
+    if err != nil {
+        fmt.Println("Processing failed:", err)
+        return
+    }
+    
+    // Pretty print the result
+    prettyJSON, _ := easy.PrettyPrint(result)
+    fmt.Println(prettyJSON)
+}
+```
+
+### Available Processors
+
+You can list all available processors:
+
+```go
+processors := easy.ListAvailableProcessors()
+fmt.Printf("Available processors: %v\n", processors)
+```
+
+Built-in processors include:
+- `sentiment`: Analyzes the sentiment of text (positive, negative, neutral)
+- `intent`: Identifies the user's intent from the text
+- `required_attributes`: Identifies required attributes mentioned in the text
+- `get_attributes`: Extracts structured attributes from the text
+
+## Advanced Usage
+
+For more control, you can use the lower-level APIs that power the `easy` package.
+
+### Using the ProcessorWrapper Directly
+
+```go
+// Create a processor wrapper
+wrapper, err := easy.New("sentiment")
+if err != nil {
+    fmt.Println("Failed to create wrapper:", err)
+    return
+}
+
+// Process text
+result, err := wrapper.Process("I absolutely love this product")
+if err != nil {
+    fmt.Println("Processing failed:", err)
+    return
+}
+
+// Batch process multiple inputs
+results, err := wrapper.ProcessBatch(inputs, 2) // concurrency of 2
+if err != nil {
+    fmt.Println("Batch processing failed:", err)
+    return
+}
+```
+
+### Using the Low-Level API
+
+For complete control over the processing pipeline:
 
 ```go
 package main
@@ -105,7 +214,6 @@ package main
 import (
     "fmt"
     "context"
-    "log"
     
     "github.com/eisenzopf/agentic-text/pkg/llm"
     "github.com/eisenzopf/agentic-text/pkg/processor"
@@ -124,22 +232,25 @@ func main() {
     // Initialize an LLM provider
     provider, err := llm.NewProvider(llm.Google, config)
     if err != nil {
-        log.Fatalf("Failed to initialize provider: %v", err)
+        fmt.Println("Failed to initialize provider:", err)
+        return
     }
     
     // Create a processor using the provider
     sentimentProcessor, err := processor.Create("sentiment", provider, processor.Options{})
     if err != nil {
-        log.Fatalf("Failed to get processor: %v", err)
+        fmt.Println("Failed to get processor:", err)
+        return
     }
     
     // Create a ProcessItem
-    item := data.NewTextProcessItem("input-1", "I really enjoyed this product!", nil)
+    item := data.NewTextProcessItem("input-1", "I really enjoyed this product", nil)
     
     // Process the item
     result, err := sentimentProcessor.Process(context.Background(), item)
     if err != nil {
-        log.Fatalf("Processing failed: %v", err)
+        fmt.Println("Processing failed:", err)
+        return
     }
     
     // Get processor data from ProcessingInfo
@@ -154,80 +265,14 @@ func main() {
 }
 ```
 
-## Usage
-
-### Configuring an LLM Provider
-
-```go
-// Initialize LLM provider with configuration options
-config := llm.Config{
-    APIKey:      "your-api-key", // Use environment variables in production
-    Model:       "gemini-2.0-flash",  // Model name varies by provider
-    MaxTokens:   1024,           // Maximum tokens in response
-    Temperature: 0.2,            // Lower for more deterministic outputs
-    Options:     map[string]interface{}{"debug": true}, // Optional debug mode
-}
-
-// Create a provider (currently supported providers: Google, OpenAI)
-provider, err := llm.NewProvider(llm.Google, config)
-if err != nil {
-    log.Fatalf("Failed to initialize provider: %v", err)
-}
-```
-
-### Using the ProcessItem Approach
-
-The ProcessItem approach provides a standardized container for data flowing through processors:
-
-```go
-import (
-    "context"
-    "fmt"
-    "log"
-    
-    "github.com/eisenzopf/agentic-text/pkg/data"
-    "github.com/eisenzopf/agentic-text/pkg/processor"
-    "github.com/eisenzopf/agentic-text/pkg/pipeline"
-)
-
-// Create processors
-sentimentProc, err := processor.Create("sentiment", provider, processor.Options{})
-if err != nil {
-    log.Fatalf("Failed to get processor: %v", err)
-}
-
-// Create a ProcessItem with metadata
-item := data.NewTextProcessItem("input-1", "I absolutely love this product!", map[string]interface{}{
-    "source": "customer-review",
-    "timestamp": "2023-07-15T10:30:00Z",
-})
-
-// Process the item
-result, err := sentimentProc.Process(context.Background(), item)
-if err != nil {
-    log.Fatalf("Processing failed: %v", err)
-}
-
-// Access the results
-fmt.Printf("Content Type: %s\n", result.ContentType)
-
-// Access processing history
-for procName, procInfo := range result.ProcessingInfo {
-    fmt.Printf("Processor: %s, Info: %v\n", procName, procInfo)
-}
-
-// Access metadata
-fmt.Printf("Metadata: %v\n", result.Metadata)
-```
-
 ### Batch Processing with ProcessItems
 
 ```go
 // Create multiple ProcessItems
 items := []*data.ProcessItem{
-    data.NewTextProcessItem("input-1", "I'm really disappointed with this service.", nil),
-    data.NewTextProcessItem("input-2", "The product is okay, but nothing special.", nil),
-    data.NewTextProcessItem("input-3", "This is the best experience I've ever had!", nil),
+    data.NewTextProcessItem("input-1", "I am really disappointed with this service", nil),
+    data.NewTextProcessItem("input-2", "The product is okay, but nothing special", nil),
+    data.NewTextProcessItem("input-3", "This is the best experience I have ever had", nil),
 }
 
 // Create a ProcessItemSource from the items
@@ -237,7 +282,8 @@ source := data.NewProcessItemSliceSource(items)
 // Parameters: context, data source, batch size, concurrency
 results, err := sentimentProc.ProcessSource(context.Background(), source, 2, 2)
 if err != nil {
-    log.Fatalf("Batch processing failed: %v", err)
+    fmt.Println("Batch processing failed:", err)
+    return
 }
 
 // Process the results
@@ -338,21 +384,11 @@ func init() {
 }
 ```
 
-## Benefits of the ProcessItem Approach
-
-The ProcessItem-based approach offers several advantages:
-
-1. **Content Type Flexibility**: Processors can handle different content types (text, JSON, etc.) with type safety
-2. **Processing History**: The entire processing history is preserved in the ProcessingInfo field
-3. **Metadata Preservation**: Metadata is maintained throughout the processing pipeline
-4. **Standardization**: Consistent interface for all processors, regardless of input/output types
-5. **Extensibility**: New content types can be added without changing the interface
-6. **Debugging Support**: Debug information can be included with the processor results
-
 ## Examples
 
 See the [examples](./examples) directory for more detailed examples:
 
+- [Easy Usage](./examples/easy_usage): Demonstrates the simplified `easy` package interface
 - [Basic Usage](./examples/basic_usage): Demonstrates basic text processing with different processors
 - [ProcessItem Usage](./examples/processitem_usage): Shows how to use the ProcessItem approach for more complex processing
 - [Custom Processor](./examples/custom_processor): Explains how to create and use custom processors
@@ -360,7 +396,7 @@ See the [examples](./examples) directory for more detailed examples:
 
 ## Documentation
 
-[Full documentation coming soon]
+For more details on the `easy` package, see the [pkg/easy/README.md](./pkg/easy/README.md) file.
 
 ## License
 
