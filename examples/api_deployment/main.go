@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/eisenzopf/agentic-text/pkg/data"
 	"github.com/eisenzopf/agentic-text/pkg/llm"
 	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
@@ -53,23 +54,36 @@ func (s *Server) HandleProcess(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get the processor
-	proc, err := processor.GetProcessor(req.Processor, s.provider, processor.Options{})
+	proc, err := processor.Create(req.Processor, s.provider, processor.Options{})
 	if err != nil {
 		respondWithError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
+	// Create a ProcessItem from the text
+	item := data.NewTextProcessItem("api-request", req.Text, nil)
+
 	// Process the text
-	result, err := proc.Process(r.Context(), req.Text)
+	result, err := proc.Process(r.Context(), item)
 	if err != nil {
 		respondWithError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Extract processing results
+	var processorResult interface{}
+	if result.ProcessingInfo != nil {
+		// Get the processing info from the processor
+		for _, info := range result.ProcessingInfo {
+			processorResult = info
+			break
+		}
+	}
+
 	// Send the response
 	response := ProcessResponse{
 		Original: req.Text,
-		Result:   result.Data,
+		Result:   processorResult,
 		Success:  true,
 	}
 

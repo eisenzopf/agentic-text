@@ -5,40 +5,30 @@ import (
 	"io"
 )
 
-// TextItem represents a single text snippet with optional metadata
-type TextItem struct {
-	// ID is an optional identifier for the text
-	ID string
-	// Content is the actual text content
-	Content string
-	// Metadata is optional key-value pairs associated with the text
-	Metadata map[string]interface{}
-}
-
-// Source defines the interface for data sources
-type Source interface {
-	// Next returns the next text item or error when exhausted
-	Next(context.Context) (*TextItem, error)
+// ProcessItemSource defines an interface for sources that can directly provide ProcessItems
+type ProcessItemSource interface {
+	// NextProcessItem returns the next ProcessItem or error when exhausted
+	NextProcessItem(context.Context) (*ProcessItem, error)
 	// Close releases any resources used by the source
 	Close() error
 }
 
-// SliceSource implements Source for a slice of text items
-type SliceSource struct {
-	items []*TextItem
+// ProcessItemSliceSource implements ProcessItemSource for a slice of ProcessItems
+type ProcessItemSliceSource struct {
+	items []*ProcessItem
 	index int
 }
 
-// NewSliceSource creates a new source from a slice of text items
-func NewSliceSource(items []*TextItem) *SliceSource {
-	return &SliceSource{
+// NewProcessItemSliceSource creates a new source from a slice of ProcessItems
+func NewProcessItemSliceSource(items []*ProcessItem) *ProcessItemSliceSource {
+	return &ProcessItemSliceSource{
 		items: items,
 		index: 0,
 	}
 }
 
-// Next implements the Source interface
-func (s *SliceSource) Next(_ context.Context) (*TextItem, error) {
+// NextProcessItem implements the ProcessItemSource interface
+func (s *ProcessItemSliceSource) NextProcessItem(_ context.Context) (*ProcessItem, error) {
 	if s.index >= len(s.items) {
 		return nil, io.EOF
 	}
@@ -48,36 +38,42 @@ func (s *SliceSource) Next(_ context.Context) (*TextItem, error) {
 	return item, nil
 }
 
-// Close implements the Source interface
-func (s *SliceSource) Close() error {
+// Close implements the ProcessItemSource interface
+func (s *ProcessItemSliceSource) Close() error {
 	return nil
 }
 
-// StringsSource is a convenience wrapper for a slice of strings
-type StringsSource struct {
-	source *SliceSource
+// TextStringsProcessItemSource is a convenience wrapper for a slice of strings as ProcessItems
+type TextStringsProcessItemSource struct {
+	items []*ProcessItem
+	index int
 }
 
-// NewStringsSource creates a new source from a slice of strings
-func NewStringsSource(strings []string) *StringsSource {
-	items := make([]*TextItem, len(strings))
+// NewTextStringsProcessItemSource creates a new ProcessItemSource from a slice of strings
+func NewTextStringsProcessItemSource(strings []string) *TextStringsProcessItemSource {
+	items := make([]*ProcessItem, len(strings))
 	for i, str := range strings {
-		items[i] = &TextItem{
-			Content: str,
-		}
+		items[i] = NewTextProcessItem("", str, nil)
 	}
 
-	return &StringsSource{
-		source: NewSliceSource(items),
+	return &TextStringsProcessItemSource{
+		items: items,
+		index: 0,
 	}
 }
 
-// Next implements the Source interface
-func (s *StringsSource) Next(ctx context.Context) (*TextItem, error) {
-	return s.source.Next(ctx)
+// NextProcessItem implements the ProcessItemSource interface
+func (s *TextStringsProcessItemSource) NextProcessItem(_ context.Context) (*ProcessItem, error) {
+	if s.index >= len(s.items) {
+		return nil, io.EOF
+	}
+
+	item := s.items[s.index]
+	s.index++
+	return item, nil
 }
 
-// Close implements the Source interface
-func (s *StringsSource) Close() error {
-	return s.source.Close()
+// Close implements the ProcessItemSource interface
+func (s *TextStringsProcessItemSource) Close() error {
+	return nil
 }

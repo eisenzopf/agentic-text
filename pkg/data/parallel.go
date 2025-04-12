@@ -9,14 +9,14 @@ import (
 // DefaultWorkers is the default number of parallel workers
 const DefaultWorkers = 4
 
-// ParallelProcessor processes data using multiple goroutines
-type ParallelProcessor struct {
-	batchProcessor *BatchProcessor
+// ProcessItemParallelProcessor processes ProcessItems using multiple goroutines
+type ProcessItemParallelProcessor struct {
+	batchProcessor *ProcessItemBatchProcessor
 	maxWorkers     int
 }
 
-// NewParallelProcessor creates a new parallel processor
-func NewParallelProcessor(source Source, batchSize, maxWorkers int) *ParallelProcessor {
+// NewProcessItemParallelProcessor creates a new parallel processor for ProcessItems
+func NewProcessItemParallelProcessor(source ProcessItemSource, batchSize, maxWorkers int) *ProcessItemParallelProcessor {
 	if maxWorkers <= 0 {
 		maxWorkers = DefaultWorkers
 	}
@@ -26,25 +26,25 @@ func NewParallelProcessor(source Source, batchSize, maxWorkers int) *ParallelPro
 		maxWorkers = runtime.NumCPU()
 	}
 
-	return &ParallelProcessor{
-		batchProcessor: NewBatchProcessor(source, batchSize),
+	return &ProcessItemParallelProcessor{
+		batchProcessor: NewProcessItemBatchProcessor(source, batchSize),
 		maxWorkers:     maxWorkers,
 	}
 }
 
 // Close closes the underlying batch processor
-func (p *ParallelProcessor) Close() error {
+func (p *ProcessItemParallelProcessor) Close() error {
 	return p.batchProcessor.Close()
 }
 
-// ProcessBatch processes a batch of data in parallel
-func (p *ParallelProcessor) ProcessBatch(ctx context.Context, processor func(ctx context.Context, item *TextItem) (*TextItem, error)) ([]*TextItem, error) {
+// ProcessBatch processes a batch of ProcessItems in parallel
+func (p *ProcessItemParallelProcessor) ProcessBatch(ctx context.Context, processor func(ctx context.Context, item *ProcessItem) (*ProcessItem, error)) ([]*ProcessItem, error) {
 	batch, err := p.batchProcessor.NextBatch(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]*TextItem, len(batch))
+	results := make([]*ProcessItem, len(batch))
 	errs := make([]error, len(batch))
 
 	// Use a semaphore to limit the number of concurrent goroutines
@@ -53,7 +53,7 @@ func (p *ParallelProcessor) ProcessBatch(ctx context.Context, processor func(ctx
 
 	for i, item := range batch {
 		wg.Add(1)
-		go func(i int, item *TextItem) {
+		go func(i int, item *ProcessItem) {
 			defer wg.Done()
 
 			// Acquire semaphore
@@ -79,9 +79,9 @@ func (p *ParallelProcessor) ProcessBatch(ctx context.Context, processor func(ctx
 	return results, nil
 }
 
-// ProcessAll processes all data in parallel
-func (p *ParallelProcessor) ProcessAll(ctx context.Context, processor func(ctx context.Context, item *TextItem) (*TextItem, error)) ([]*TextItem, error) {
-	var allResults []*TextItem
+// ProcessAll processes all ProcessItems in parallel
+func (p *ProcessItemParallelProcessor) ProcessAll(ctx context.Context, processor func(ctx context.Context, item *ProcessItem) (*ProcessItem, error)) ([]*ProcessItem, error) {
+	var allResults []*ProcessItem
 	var mu sync.Mutex
 
 	// Process batches sequentially, but items within each batch in parallel

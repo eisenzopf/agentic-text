@@ -2,7 +2,9 @@ package processor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/eisenzopf/agentic-text/pkg/llm"
 )
@@ -29,8 +31,11 @@ type SentimentResult struct {
 func NewSentimentProcessor(provider llm.Provider, options Options) (*SentimentProcessor, error) {
 	p := &SentimentProcessor{}
 
+	// Create client from provider
+	client := llm.NewProviderClient(provider)
+
 	// Create and embed base processor
-	base := NewBaseProcessor("sentiment", provider, options, nil, p, p)
+	base := NewBaseProcessor("sentiment", []string{"text"}, client, nil, p, p, options)
 	p.BaseProcessor = *base
 
 	return p, nil
@@ -64,11 +69,44 @@ func (p *SentimentProcessor) GeneratePrompt(ctx context.Context, text string) (s
 }
 
 // HandleResponse implements ResponseHandler interface - handles the LLM response
-func (p *SentimentProcessor) HandleResponse(ctx context.Context, text string, responseData interface{}) (*Result, error) {
+func (p *SentimentProcessor) HandleResponse(ctx context.Context, text string, responseData interface{}) (interface{}, error) {
+	// Check if responseData is a string, which can happen with some providers
+	if strResponse, ok := responseData.(string); ok {
+		// Remove markdown code block if present
+		cleanResponse := strResponse
+		if strings.HasPrefix(cleanResponse, "```json") && strings.HasSuffix(cleanResponse, "```") {
+			// Extract content between ```json and ```
+			cleanResponse = strings.TrimPrefix(cleanResponse, "```json")
+			cleanResponse = strings.TrimSuffix(cleanResponse, "```")
+			cleanResponse = strings.TrimSpace(cleanResponse)
+		} else if strings.HasPrefix(cleanResponse, "```") && strings.HasSuffix(cleanResponse, "```") {
+			// Extract content between ``` and ```
+			cleanResponse = strings.TrimPrefix(cleanResponse, "```")
+			cleanResponse = strings.TrimSuffix(cleanResponse, "```")
+			cleanResponse = strings.TrimSpace(cleanResponse)
+		}
+
+		// Try to parse the string as JSON
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(cleanResponse), &data); err != nil {
+			// If parsing fails, wrap it as a response
+			return map[string]interface{}{
+				"sentiment":      "unknown",
+				"score":          0.0,
+				"confidence":     0.0,
+				"keywords":       []string{},
+				"response":       strResponse,
+				"processor_type": "sentiment",
+			}, nil
+		}
+		// If parsing succeeds, use the parsed data
+		responseData = data
+	}
+
 	// Convert the response data to map
 	data, ok := responseData.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid response data format")
+		return nil, fmt.Errorf("invalid response data format: %T", responseData)
 	}
 
 	// Check if debug info exists and preserve it
@@ -82,11 +120,12 @@ func (p *SentimentProcessor) HandleResponse(ctx context.Context, text string, re
 		// This is a fallback case where the LLM didn't produce valid JSON
 		// Create a placeholder sentiment result
 		resultMap := map[string]interface{}{
-			"sentiment":  "unknown",
-			"score":      0.0,
-			"confidence": 0.0,
-			"keywords":   []string{},
-			"response":   response,
+			"sentiment":      "unknown",
+			"score":          0.0,
+			"confidence":     0.0,
+			"keywords":       []string{},
+			"response":       response,
+			"processor_type": "sentiment",
 		}
 
 		// Add debug info back if it existed
@@ -94,11 +133,7 @@ func (p *SentimentProcessor) HandleResponse(ctx context.Context, text string, re
 			resultMap["debug"] = debugInfo
 		}
 
-		return &Result{
-			Original:  text,
-			Processed: text,
-			Data:      resultMap,
-		}, nil
+		return resultMap, nil
 	}
 
 	// Normal case - we have sentiment data fields
@@ -119,10 +154,11 @@ func (p *SentimentProcessor) HandleResponse(ctx context.Context, text string, re
 
 	// Create result map with sentiment data
 	resultMap := map[string]interface{}{
-		"sentiment":  sentiment,
-		"score":      score,
-		"confidence": confidence,
-		"keywords":   keywords,
+		"sentiment":      sentiment,
+		"score":          score,
+		"confidence":     confidence,
+		"keywords":       keywords,
+		"processor_type": "sentiment",
 	}
 
 	// Add debug info back if it existed
@@ -130,11 +166,7 @@ func (p *SentimentProcessor) HandleResponse(ctx context.Context, text string, re
 		resultMap["debug"] = debugInfo
 	}
 
-	return &Result{
-		Original:  text,
-		Processed: text,
-		Data:      resultMap,
-	}, nil
+	return resultMap, nil
 }
 
 // Register the processor with the registry

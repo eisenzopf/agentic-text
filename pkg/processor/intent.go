@@ -2,7 +2,9 @@ package processor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/eisenzopf/agentic-text/pkg/llm"
 )
@@ -27,8 +29,11 @@ type IntentResult struct {
 func NewIntentProcessor(provider llm.Provider, options Options) (*IntentProcessor, error) {
 	p := &IntentProcessor{}
 
-	// Create and embed base processor
-	base := NewBaseProcessor("intent", provider, options, nil, p, p)
+	// Create client from provider
+	client := llm.NewProviderClient(provider)
+
+	// Create and embed base processor - support both text and json content types
+	base := NewBaseProcessor("intent", []string{"text", "json"}, client, nil, p, p, options)
 	p.BaseProcessor = *base
 
 	return p, nil
@@ -38,7 +43,7 @@ func NewIntentProcessor(provider llm.Provider, options Options) (*IntentProcesso
 func (p *IntentProcessor) GeneratePrompt(ctx context.Context, text string) (string, error) {
 	return fmt.Sprintf(`You are a helpful AI assistant specializing in classifying customer service conversations. Your task is to analyze a provided conversation transcript and determine the customer's *primary* intent for contacting customer service. Focus on the *main reason* the customer initiated the interaction, even if other topics are briefly mentioned.
 
-**Input:** You will receive a conversation transcript as text.
+**Input:** You will receive a conversation transcript as text. If the input appears to be in JSON format, focus on the text content and ignore the JSON structure.
 
 **Output:** You will return a JSON object with the following *exact* keys and data types:
 
@@ -60,11 +65,43 @@ Conversation Transcript:
 }
 
 // HandleResponse implements ResponseHandler interface - handles the LLM response
-func (p *IntentProcessor) HandleResponse(ctx context.Context, text string, responseData interface{}) (*Result, error) {
+func (p *IntentProcessor) HandleResponse(ctx context.Context, text string, responseData interface{}) (interface{}, error) {
+	// Check if responseData is a string, which can happen with some providers
+	if strResponse, ok := responseData.(string); ok {
+		// Remove markdown code block if present
+		cleanResponse := strResponse
+		if strings.HasPrefix(cleanResponse, "```json") && strings.HasSuffix(cleanResponse, "```") {
+			// Extract content between ```json and ```
+			cleanResponse = strings.TrimPrefix(cleanResponse, "```json")
+			cleanResponse = strings.TrimSuffix(cleanResponse, "```")
+			cleanResponse = strings.TrimSpace(cleanResponse)
+		} else if strings.HasPrefix(cleanResponse, "```") && strings.HasSuffix(cleanResponse, "```") {
+			// Extract content between ``` and ```
+			cleanResponse = strings.TrimPrefix(cleanResponse, "```")
+			cleanResponse = strings.TrimSuffix(cleanResponse, "```")
+			cleanResponse = strings.TrimSpace(cleanResponse)
+		}
+
+		// Try to parse the string as JSON
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(cleanResponse), &data); err != nil {
+			// If parsing fails, wrap it as a response
+			return map[string]interface{}{
+				"label_name":     "Unclear Intent",
+				"label":          "unclear_intent",
+				"description":    "The conversation transcript is unclear or does not contain a discernible customer service request.",
+				"response":       strResponse,
+				"processor_type": "intent",
+			}, nil
+		}
+		// If parsing succeeds, use the parsed data
+		responseData = data
+	}
+
 	// Convert the response data to map
 	data, ok := responseData.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid response data format")
+		return nil, fmt.Errorf("invalid response data format: %T", responseData)
 	}
 
 	// Check if debug info exists and preserve it
@@ -77,10 +114,11 @@ func (p *IntentProcessor) HandleResponse(ctx context.Context, text string, respo
 	if response, exists := data["response"]; exists && len(data) <= 2 { // data has only response and maybe debug
 		// This is a fallback case where the LLM didn't produce valid JSON
 		resultMap := map[string]interface{}{
-			"label_name":  "Unclear Intent",
-			"label":       "unclear_intent",
-			"description": "The conversation transcript is unclear or does not contain a discernible customer service request.",
-			"response":    response,
+			"label_name":     "Unclear Intent",
+			"label":          "unclear_intent",
+			"description":    "The conversation transcript is unclear or does not contain a discernible customer service request.",
+			"response":       response,
+			"processor_type": "intent",
 		}
 
 		// Add debug info back if it existed
@@ -88,11 +126,7 @@ func (p *IntentProcessor) HandleResponse(ctx context.Context, text string, respo
 			resultMap["debug"] = debugInfo
 		}
 
-		return &Result{
-			Original:  text,
-			Processed: text,
-			Data:      resultMap,
-		}, nil
+		return resultMap, nil
 	}
 
 	// Extract intent fields with defaults
@@ -111,9 +145,10 @@ func (p *IntentProcessor) HandleResponse(ctx context.Context, text string, respo
 
 	// Create result map with intent data
 	resultMap := map[string]interface{}{
-		"label_name":  labelName,
-		"label":       label,
-		"description": description,
+		"label_name":     labelName,
+		"label":          label,
+		"description":    description,
+		"processor_type": "intent",
 	}
 
 	// Add debug info back if it existed
@@ -121,11 +156,7 @@ func (p *IntentProcessor) HandleResponse(ctx context.Context, text string, respo
 		resultMap["debug"] = debugInfo
 	}
 
-	return &Result{
-		Original:  text,
-		Processed: text,
-		Data:      resultMap,
-	}, nil
+	return resultMap, nil
 }
 
 // Register the processor with the registry

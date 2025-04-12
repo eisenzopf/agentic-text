@@ -2,7 +2,9 @@ package processor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/eisenzopf/agentic-text/pkg/llm"
 )
@@ -25,8 +27,11 @@ type RequiredAttributesProcessor struct {
 func NewRequiredAttributesProcessor(provider llm.Provider, options Options) (*RequiredAttributesProcessor, error) {
 	p := &RequiredAttributesProcessor{}
 
-	// Create and embed base processor
-	base := NewBaseProcessor("required_attributes", provider, options, nil, p, p)
+	// Create client from provider
+	client := llm.NewProviderClient(provider)
+
+	// Create and embed base processor - support both text and json content types
+	base := NewBaseProcessor("required_attributes", []string{"text", "json"}, client, nil, p, p, options)
 	p.BaseProcessor = *base
 
 	return p, nil
@@ -65,12 +70,57 @@ func (p *RequiredAttributesProcessor) GeneratePrompt(ctx context.Context, text s
 }`, text), nil
 }
 
+// Helper function to safely get string values from interface maps
+func getRequiredAttrString(m map[string]interface{}, key string) string {
+	if val, ok := m[key].(string); ok {
+		return val
+	}
+	return ""
+}
+
 // HandleResponse implements ResponseHandler interface - handles the LLM response
-func (p *RequiredAttributesProcessor) HandleResponse(ctx context.Context, text string, responseData interface{}) (*Result, error) {
+func (p *RequiredAttributesProcessor) HandleResponse(ctx context.Context, text string, responseData interface{}) (interface{}, error) {
+	// Check if responseData is a string, which can happen with some providers
+	if strResponse, ok := responseData.(string); ok {
+		// Remove markdown code block if present
+		cleanResponse := strResponse
+		if strings.HasPrefix(cleanResponse, "```json") && strings.HasSuffix(cleanResponse, "```") {
+			// Extract content between ```json and ```
+			cleanResponse = strings.TrimPrefix(cleanResponse, "```json")
+			cleanResponse = strings.TrimSuffix(cleanResponse, "```")
+			cleanResponse = strings.TrimSpace(cleanResponse)
+		} else if strings.HasPrefix(cleanResponse, "```") && strings.HasSuffix(cleanResponse, "```") {
+			// Extract content between ``` and ```
+			cleanResponse = strings.TrimPrefix(cleanResponse, "```")
+			cleanResponse = strings.TrimSuffix(cleanResponse, "```")
+			cleanResponse = strings.TrimSpace(cleanResponse)
+		}
+
+		// Try to parse the string as JSON
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(cleanResponse), &data); err != nil {
+			// If parsing fails, wrap it as a response with a default attribute
+			return map[string]interface{}{
+				"attributes": []AttributeDefinition{
+					{
+						FieldName:   "unknown",
+						Title:       "Unknown",
+						Description: "Unable to determine required attributes from the response",
+						Rationale:   "The response did not contain valid attribute definitions",
+					},
+				},
+				"response":       strResponse,
+				"processor_type": "required_attributes",
+			}, nil
+		}
+		// If parsing succeeds, use the parsed data
+		responseData = data
+	}
+
 	// Convert the response data to map
 	data, ok := responseData.(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("invalid response data format")
+		return nil, fmt.Errorf("invalid response data format: %T", responseData)
 	}
 
 	// Check if debug info exists and preserve it
@@ -102,10 +152,10 @@ func (p *RequiredAttributesProcessor) HandleResponse(ctx context.Context, text s
 		}
 
 		attr := AttributeDefinition{
-			FieldName:   attrMap["field_name"].(string),
-			Title:       attrMap["title"].(string),
-			Description: attrMap["description"].(string),
-			Rationale:   attrMap["rationale"].(string),
+			FieldName:   getRequiredAttrString(attrMap, "field_name"),
+			Title:       getRequiredAttrString(attrMap, "title"),
+			Description: getRequiredAttrString(attrMap, "description"),
+			Rationale:   getRequiredAttrString(attrMap, "rationale"),
 		}
 
 		// Only add if field_name is valid
@@ -116,7 +166,8 @@ func (p *RequiredAttributesProcessor) HandleResponse(ctx context.Context, text s
 
 	// Create result map with attributes
 	resultMap := map[string]interface{}{
-		"attributes": attributes,
+		"attributes":     attributes,
+		"processor_type": "required_attributes",
 	}
 
 	// Add debug info back if it existed
@@ -124,11 +175,7 @@ func (p *RequiredAttributesProcessor) HandleResponse(ctx context.Context, text s
 		resultMap["debug"] = debugInfo
 	}
 
-	return &Result{
-		Original:  text,
-		Processed: text,
-		Data:      resultMap,
-	}, nil
+	return resultMap, nil
 }
 
 // Register the processor with the registry

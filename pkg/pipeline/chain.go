@@ -22,58 +22,22 @@ func NewChain(name string, processors ...processor.Processor) *Chain {
 	}
 }
 
-// Process processes a text through the entire chain
-func (c *Chain) Process(ctx context.Context, text string) (*processor.Result, error) {
+// Process processes a ProcessItem through the entire chain
+func (c *Chain) Process(ctx context.Context, item *data.ProcessItem) (*data.ProcessItem, error) {
 	if len(c.processors) == 0 {
 		return nil, fmt.Errorf("empty processor chain")
 	}
 
-	var result *processor.Result
-	var err error
-
 	// Process with the first processor
-	result, err = c.processors[0].Process(ctx, text)
+	result, err := c.processors[0].Process(ctx, item)
 	if err != nil {
 		return nil, fmt.Errorf("processor '%s' error: %w", c.processors[0].GetName(), err)
 	}
 
-	// Process with remaining processors, using the processed text from the previous step
+	// Process with remaining processors, using the result from the previous step
 	for i := 1; i < len(c.processors); i++ {
 		proc := c.processors[i]
-		result, err = proc.Process(ctx, result.Processed)
-		if err != nil {
-			return nil, fmt.Errorf("processor '%s' error: %w", proc.GetName(), err)
-		}
-	}
-
-	return result, nil
-}
-
-// ProcessItem processes a data.TextItem through the entire chain
-func (c *Chain) ProcessItem(ctx context.Context, item *data.TextItem) (*processor.Result, error) {
-	if len(c.processors) == 0 {
-		return nil, fmt.Errorf("empty processor chain")
-	}
-
-	var result *processor.Result
-	var err error
-
-	// Process with the first processor
-	result, err = c.processors[0].ProcessItem(ctx, item)
-	if err != nil {
-		return nil, fmt.Errorf("processor '%s' error: %w", c.processors[0].GetName(), err)
-	}
-
-	// Process with remaining processors, using the processed text from the previous step
-	for i := 1; i < len(c.processors); i++ {
-		proc := c.processors[i]
-		// Create a new TextItem with the processed text
-		nextItem := &data.TextItem{
-			ID:       item.ID,
-			Content:  result.Processed,
-			Metadata: item.Metadata,
-		}
-		result, err = proc.ProcessItem(ctx, nextItem)
+		result, err = proc.Process(ctx, result)
 		if err != nil {
 			return nil, fmt.Errorf("processor '%s' error: %w", proc.GetName(), err)
 		}
@@ -83,7 +47,7 @@ func (c *Chain) ProcessItem(ctx context.Context, item *data.TextItem) (*processo
 }
 
 // ProcessSource processes a data source through the chain
-func (c *Chain) ProcessSource(ctx context.Context, source data.Source, batchSize, workers int) ([]*processor.Result, error) {
+func (c *Chain) ProcessSource(ctx context.Context, source data.ProcessItemSource, batchSize, workers int) ([]*data.ProcessItem, error) {
 	if len(c.processors) == 0 {
 		return nil, fmt.Errorf("empty processor chain")
 	}
@@ -104,30 +68,8 @@ func (c *Chain) ProcessSource(ctx context.Context, source data.Source, batchSize
 	for i := 1; i < len(c.processors); i++ {
 		proc := c.processors[i]
 
-		// Convert results to TextItems for the next processor
-		items := make([]*data.TextItem, len(currentResults))
-		for j, result := range currentResults {
-			// Get the ID and metadata from the original if available
-			var id string
-			var metadata map[string]interface{}
-
-			if item, ok := result.Original.(*data.TextItem); ok {
-				id = item.ID
-				metadata = item.Metadata
-			}
-
-			items[j] = &data.TextItem{
-				ID:       id,
-				Content:  result.Processed,
-				Metadata: metadata,
-			}
-		}
-
-		// Create a source from the items
-		nextSource := data.NewSliceSource(items)
-
 		// Process with the next processor
-		nextResults, err := proc.ProcessSource(ctx, nextSource, batchSize, workers)
+		nextResults, err := proc.ProcessBatch(ctx, currentResults)
 		if err != nil {
 			return nil, err
 		}
@@ -141,4 +83,28 @@ func (c *Chain) ProcessSource(ctx context.Context, source data.Source, batchSize
 // GetName returns the chain name
 func (c *Chain) GetName() string {
 	return c.name
+}
+
+// ProcessBatch processes a batch of items through the chain
+func (c *Chain) ProcessBatch(ctx context.Context, items []*data.ProcessItem) ([]*data.ProcessItem, error) {
+	if len(c.processors) == 0 {
+		return nil, fmt.Errorf("empty processor chain")
+	}
+
+	// Process with the first processor
+	currentResults, err := c.processors[0].ProcessBatch(ctx, items)
+	if err != nil {
+		return nil, fmt.Errorf("processor '%s' error: %w", c.processors[0].GetName(), err)
+	}
+
+	// Process with remaining processors
+	for i := 1; i < len(c.processors); i++ {
+		proc := c.processors[i]
+		currentResults, err = proc.ProcessBatch(ctx, currentResults)
+		if err != nil {
+			return nil, fmt.Errorf("processor '%s' error: %w", proc.GetName(), err)
+		}
+	}
+
+	return currentResults, nil
 }

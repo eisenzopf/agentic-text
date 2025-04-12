@@ -131,14 +131,22 @@ func main() {
 	}
 
 	// Create a processor
-	proc, err := processor.GetProcessor(*processorType, provider, processor.Options{})
+	proc, err := processor.Create(*processorType, provider, processor.Options{})
 	if err != nil {
 		log.Fatalf("Failed to get processor: %v", err)
 	}
 
 	if *batchMode {
 		// Process all inputs as a batch
-		source := data.NewStringsSource(args)
+		items := make([]*data.ProcessItem, len(args))
+		for i, text := range args {
+			items[i] = data.NewTextProcessItem(fmt.Sprintf("input-%d", i+1), text, nil)
+		}
+
+		// Create a ProcessItemSource from the items
+		source := data.NewProcessItemSliceSource(items)
+
+		// Process all items
 		results, err := proc.ProcessSource(context.Background(), source, 2, 2)
 		if err != nil {
 			log.Fatalf("Batch processing failed: %v", err)
@@ -147,39 +155,45 @@ func main() {
 		// Print batch results
 		fmt.Println("\nResults:")
 		for i, result := range results {
-			// Get the original text
+			// Get the original text from the content
 			origText := ""
-			if item, ok := result.Original.(*data.TextItem); ok {
-				origText = item.Content
-			} else if s, ok := result.Original.(string); ok {
-				origText = s
+			if text, err := result.GetTextContent(); err == nil {
+				origText = text
 			}
 
 			fmt.Printf("\nText %d: %s\n", i+1, origText)
 
 			// Print debug info if verbose mode is enabled
-			if *verbose && result.Data != nil {
-				if debugInfo, ok := result.Data.(map[string]interface{})["debug"]; ok {
-					if debug, ok := debugInfo.(map[string]interface{}); ok {
-						// Show only the prompt and raw response
-						fmt.Println("\n=== LLM INPUT ===")
-						if prompt, ok := debug["prompt"].(string); ok {
-							fmt.Println(prompt)
+			if *verbose && result.ProcessingInfo != nil {
+				for procName, procInfo := range result.ProcessingInfo {
+					if debugMap, ok := procInfo.(map[string]interface{}); ok {
+						if debug, ok := debugMap["debug"].(map[string]interface{}); ok {
+							fmt.Printf("\n=== LLM INPUT for processor %s ===\n", procName)
+							if prompt, ok := debug["prompt"].(string); ok {
+								fmt.Println(prompt)
+							}
+							fmt.Println("=== END LLM INPUT ===")
+							fmt.Println("=== LLM OUTPUT ===")
+							if rawResponse, ok := debug["raw_response"].(string); ok {
+								fmt.Println(rawResponse)
+							}
+							fmt.Println("=== END LLM OUTPUT ===")
 						}
-						fmt.Println("=== END LLM INPUT ===")
-						fmt.Println("=== LLM OUTPUT ===")
-						if rawResponse, ok := debug["raw_response"].(string); ok {
-							fmt.Println(rawResponse)
-						}
-						fmt.Println("=== END LLM OUTPUT ===")
 					}
 				}
 			}
 
-			// Pretty print the data
-			outputData := result.Data
+			// Get processor data from ProcessingInfo
+			var outputData interface{}
+			if result.ProcessingInfo != nil {
+				// Take the data from the last processor in the chain
+				for _, procInfo := range result.ProcessingInfo {
+					outputData = procInfo
+				}
+			}
+
 			// Remove debug info from output if it was already shown
-			if *verbose {
+			if *verbose && outputData != nil {
 				if resultMap, ok := outputData.(map[string]interface{}); ok {
 					// Create a copy without the debug field
 					cleanData := make(map[string]interface{})
@@ -192,20 +206,39 @@ func main() {
 				}
 			}
 
+			// If we have structured result data in content and it's JSON type, use that
+			if result.ContentType == "json" {
+				outputData = result.Content
+			}
+
 			jsonData, _ := json.MarshalIndent(outputData, "", "  ")
 			fmt.Println(string(jsonData))
 		}
 	} else {
 		// Process just the first input
 		text := args[0]
-		result, err := proc.Process(context.Background(), text)
+
+		// Create a ProcessItem directly
+		item := data.NewTextProcessItem("input-1", text, nil)
+
+		// Process the item
+		result, err := proc.Process(context.Background(), item)
 		if err != nil {
 			log.Fatalf("Processing failed: %v", err)
 		}
 
+		// Get processor data from ProcessingInfo
+		var outputData interface{}
+		if result.ProcessingInfo != nil {
+			// Take the data from the processor
+			for _, procInfo := range result.ProcessingInfo {
+				outputData = procInfo
+			}
+		}
+
 		// Print debug info if verbose mode is enabled
-		if *verbose {
-			if debugData, ok := result.Data.(map[string]interface{}); ok && debugData["debug"] != nil {
+		if *verbose && outputData != nil {
+			if debugData, ok := outputData.(map[string]interface{}); ok && debugData["debug"] != nil {
 				if debug, ok := debugData["debug"].(map[string]interface{}); ok {
 					// Show only the prompt and raw response
 					fmt.Println("\n=== LLM INPUT ===")
@@ -225,10 +258,8 @@ func main() {
 			}
 		}
 
-		// Print the result as JSON (final processed result)
-		outputData := result.Data
 		// Remove debug info from output
-		if *verbose {
+		if *verbose && outputData != nil {
 			if resultMap, ok := outputData.(map[string]interface{}); ok {
 				// Create a copy without the debug field
 				cleanData := make(map[string]interface{})

@@ -5,16 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 
+	"github.com/eisenzopf/agentic-text/pkg/data"
 	"github.com/eisenzopf/agentic-text/pkg/llm"
 	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
-
-// Create a temporary TextItem struct for the example
-type TextItem struct {
-	Content string
-}
 
 // KeywordProcessor extracts keywords from text
 type KeywordProcessor struct {
@@ -32,8 +27,11 @@ type KeywordResult struct {
 func NewKeywordProcessor(provider llm.Provider, options processor.Options) (*KeywordProcessor, error) {
 	p := &KeywordProcessor{}
 
+	// Create client from provider
+	client := llm.NewProviderClient(provider)
+
 	// Pass the processor itself as the implementations for required interfaces
-	base := processor.NewBaseProcessor("keyword", provider, options, nil, p, p)
+	base := processor.NewBaseProcessor("keyword", []string{"text"}, client, nil, p, p, options)
 	p.BaseProcessor = *base
 
 	return p, nil
@@ -53,7 +51,7 @@ Format your response as valid JSON.`, text), nil
 }
 
 // HandleResponse implements ResponseHandler interface
-func (p *KeywordProcessor) HandleResponse(_ context.Context, text string, responseData interface{}) (*processor.Result, error) {
+func (p *KeywordProcessor) HandleResponse(_ context.Context, text string, responseData interface{}) (interface{}, error) {
 	// Convert the response data to KeywordResult
 	data, ok := responseData.(map[string]interface{})
 	if !ok {
@@ -91,21 +89,13 @@ func (p *KeywordProcessor) HandleResponse(_ context.Context, text string, respon
 	}
 
 	// Create keyword result
-	keywordResult := KeywordResult{
-		Keywords:    keywords,
-		Categories:  categories,
-		Frequencies: frequencies,
+	keywordResult := map[string]interface{}{
+		"keywords":    keywords,
+		"categories":  categories,
+		"frequencies": frequencies,
 	}
 
-	// Simple text processing: join keywords with commas
-	processedText := "Keywords: " + strings.Join(keywords, ", ")
-
-	// Create and return the result
-	return &processor.Result{
-		Original:  text,
-		Processed: processedText,
-		Data:      keywordResult,
-	}, nil
+	return keywordResult, nil
 }
 
 func main() {
@@ -133,7 +123,7 @@ func main() {
 		return NewKeywordProcessor(provider, options)
 	})
 
-	// Process a text
+	// Input text
 	text := "Artificial intelligence (AI) is intelligence demonstrated by machines, " +
 		"as opposed to intelligence displayed by humans or other animals. Example tasks in which " +
 		"AI is applied include speech recognition, computer vision, translation between natural " +
@@ -141,39 +131,53 @@ func main() {
 		"recommendation systems, understanding human speech, self-driving cars, automated decision-making, " +
 		"and competing at the highest level in strategic game systems."
 
-	result, err := keywordProcessor.Process(context.Background(), text)
+	// Create a ProcessItem from the text
+	item := data.NewTextProcessItem("example-1", text, nil)
+
+	// Process the item
+	result, err := keywordProcessor.Process(context.Background(), item)
 	if err != nil {
 		log.Fatalf("Processing failed: %v", err)
 	}
 
 	// Print the result
-	keywordResult, ok := result.Data.(KeywordResult)
-	if !ok {
-		log.Fatalf("Invalid result type")
-	}
-
 	fmt.Println("Custom Processor Result:")
-	fmt.Printf("Keywords: %v\n", keywordResult.Keywords)
-	fmt.Printf("Categories: %v\n", keywordResult.Categories)
-	fmt.Println("Frequencies:")
-	for k, v := range keywordResult.Frequencies {
-		fmt.Printf("  %s: %d\n", k, v)
+
+	// Get the keyword data from the ProcessingInfo
+	if procInfo, ok := result.ProcessingInfo["keyword"]; ok {
+		if keywordData, ok := procInfo.(map[string]interface{}); ok {
+			fmt.Printf("Keywords: %v\n", keywordData["keywords"])
+			fmt.Printf("Categories: %v\n", keywordData["categories"])
+			fmt.Println("Frequencies:")
+			if freqs, ok := keywordData["frequencies"].(map[string]interface{}); ok {
+				for k, v := range freqs {
+					fmt.Printf("  %s: %v\n", k, v)
+				}
+			}
+		}
 	}
 
 	// Verify that our processor was registered correctly
-	regProcessor, err := processor.GetProcessor("keyword", provider, processor.Options{})
+	regProcessor, err := processor.Create("keyword", provider, processor.Options{})
 	if err != nil {
 		log.Fatalf("Failed to get processor from registry: %v", err)
 	}
 
+	// Create a new ProcessItem for the second example
+	secondItem := data.NewTextProcessItem("example-2",
+		"Machine learning is a subset of AI focused on training models to improve with experience.",
+		nil)
+
 	// Use the registered processor
-	regResult, err := regProcessor.Process(context.Background(), "Machine learning is a subset of AI focused on training models to improve with experience.")
+	regResult, err := regProcessor.Process(context.Background(), secondItem)
 	if err != nil {
 		log.Fatalf("Processing with registered processor failed: %v", err)
 	}
 
 	// Print JSON result
 	fmt.Println("\nRegistered Processor Result:")
-	jsonData, _ := json.MarshalIndent(regResult.Data, "", "  ")
-	fmt.Println(string(jsonData))
+	if procInfo, ok := regResult.ProcessingInfo["keyword"]; ok {
+		jsonData, _ := json.MarshalIndent(procInfo, "", "  ")
+		fmt.Println(string(jsonData))
+	}
 }

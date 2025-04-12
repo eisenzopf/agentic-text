@@ -8,39 +8,39 @@ import (
 // DefaultBatchSize is the default number of items to batch together
 const DefaultBatchSize = 10
 
-// BatchProcessor processes data in batches
-type BatchProcessor struct {
-	source       Source
+// ProcessItemBatchProcessor processes ProcessItems in batches
+type ProcessItemBatchProcessor struct {
+	source       ProcessItemSource
 	batchSize    int
-	currentBatch []*TextItem
+	currentBatch []*ProcessItem
 }
 
-// NewBatchProcessor creates a new batch processor
-func NewBatchProcessor(source Source, batchSize int) *BatchProcessor {
+// NewProcessItemBatchProcessor creates a new batch processor for ProcessItems
+func NewProcessItemBatchProcessor(source ProcessItemSource, batchSize int) *ProcessItemBatchProcessor {
 	if batchSize <= 0 {
 		batchSize = DefaultBatchSize
 	}
 
-	return &BatchProcessor{
+	return &ProcessItemBatchProcessor{
 		source:       source,
 		batchSize:    batchSize,
-		currentBatch: make([]*TextItem, 0, batchSize),
+		currentBatch: make([]*ProcessItem, 0, batchSize),
 	}
 }
 
-// NextBatch returns the next batch of text items
-func (b *BatchProcessor) NextBatch(ctx context.Context) ([]*TextItem, error) {
+// NextBatch returns the next batch of ProcessItems
+func (b *ProcessItemBatchProcessor) NextBatch(ctx context.Context) ([]*ProcessItem, error) {
 	// If we already have items in the current batch, return those
 	if len(b.currentBatch) > 0 {
 		batch := b.currentBatch
-		b.currentBatch = make([]*TextItem, 0, b.batchSize)
+		b.currentBatch = make([]*ProcessItem, 0, b.batchSize)
 		return batch, nil
 	}
 
 	// Otherwise, fetch a new batch
-	batch := make([]*TextItem, 0, b.batchSize)
+	batch := make([]*ProcessItem, 0, b.batchSize)
 	for i := 0; i < b.batchSize; i++ {
-		item, err := b.source.Next(ctx)
+		item, err := b.source.NextProcessItem(ctx)
 		if err == io.EOF {
 			if len(batch) == 0 {
 				return nil, io.EOF
@@ -57,18 +57,18 @@ func (b *BatchProcessor) NextBatch(ctx context.Context) ([]*TextItem, error) {
 }
 
 // Close closes the underlying source
-func (b *BatchProcessor) Close() error {
+func (b *ProcessItemBatchProcessor) Close() error {
 	return b.source.Close()
 }
 
-// Process applies a processor function to each item in a batch
-func (b *BatchProcessor) Process(ctx context.Context, processor func(ctx context.Context, item *TextItem) (*TextItem, error)) ([]*TextItem, error) {
+// Process applies a processor function to each ProcessItem in a batch
+func (b *ProcessItemBatchProcessor) Process(ctx context.Context, processor func(ctx context.Context, item *ProcessItem) (*ProcessItem, error)) ([]*ProcessItem, error) {
 	batch, err := b.NextBatch(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]*TextItem, len(batch))
+	results := make([]*ProcessItem, len(batch))
 	for i, item := range batch {
 		result, err := processor(ctx, item)
 		if err != nil {
@@ -80,9 +80,9 @@ func (b *BatchProcessor) Process(ctx context.Context, processor func(ctx context
 	return results, nil
 }
 
-// ProcessAll applies a processor function to all remaining items
-func (b *BatchProcessor) ProcessAll(ctx context.Context, processor func(ctx context.Context, item *TextItem) (*TextItem, error)) ([]*TextItem, error) {
-	var allResults []*TextItem
+// ProcessAll applies a processor function to all remaining ProcessItems
+func (b *ProcessItemBatchProcessor) ProcessAll(ctx context.Context, processor func(ctx context.Context, item *ProcessItem) (*ProcessItem, error)) ([]*ProcessItem, error) {
+	var allResults []*ProcessItem
 
 	for {
 		results, err := b.Process(ctx, processor)

@@ -7,49 +7,40 @@ import (
 	"github.com/eisenzopf/agentic-text/pkg/llm"
 )
 
+// FactoryFunc is a function that creates processors
+type FactoryFunc func(provider llm.Provider, options Options) (Processor, error)
+
+// Global processor registry for storing all registered processor factories
 var (
-	registry = make(map[string]ProcessorFactory)
-	mutex    sync.RWMutex
+	globalRegistry     = make(map[string]FactoryFunc)
+	globalRegistryLock sync.RWMutex
 )
 
-// ProcessorFactory is a function that creates a Processor
-type ProcessorFactory func(provider llm.Provider, options Options) (Processor, error)
-
 // Register registers a processor factory with the registry
-func Register(name string, factory ProcessorFactory) {
-	mutex.Lock()
-	defer mutex.Unlock()
-	registry[name] = factory
+func Register(name string, factory FactoryFunc) {
+	globalRegistryLock.Lock()
+	defer globalRegistryLock.Unlock()
+	globalRegistry[name] = factory
 }
 
-// GetProcessor retrieves a processor by name
-func GetProcessor(name string, provider llm.Provider, options Options) (Processor, error) {
-	mutex.RLock()
-	factory, exists := registry[name]
-	mutex.RUnlock()
-
-	if !exists {
+// Create creates a processor by name
+func Create(name string, provider llm.Provider, options Options) (Processor, error) {
+	globalRegistryLock.RLock()
+	factory, ok := globalRegistry[name]
+	globalRegistryLock.RUnlock()
+	if !ok {
 		return nil, fmt.Errorf("processor not found: %s", name)
 	}
-
 	return factory(provider, options)
 }
 
-// ListProcessors returns a list of all registered processor names
+// ListProcessors returns a list of registered processor names
 func ListProcessors() []string {
-	mutex.RLock()
-	defer mutex.RUnlock()
-
-	names := make([]string, 0, len(registry))
-	for name := range registry {
+	globalRegistryLock.RLock()
+	defer globalRegistryLock.RUnlock()
+	names := make([]string, 0, len(globalRegistry))
+	for name := range globalRegistry {
 		names = append(names, name)
 	}
-
 	return names
-}
-
-// init registers built-in processors
-func init() {
-	// Register built-in processors here
-	// This will be populated as we implement individual processors
 }
