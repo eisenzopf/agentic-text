@@ -98,7 +98,10 @@ func main() {
 			log.Fatalf("Processing failed: %v", err)
 		}
 
-		prettyResult, _ := easy.PrettyPrint(result)
+		prettyResult, err := easy.PrettyPrint(result)
+		if err != nil {
+			log.Fatalf("Failed to format result: %v", err)
+		}
 		fmt.Printf("Result:\n%s\n", prettyResult)
 	} else {
 		// Batch mode
@@ -124,7 +127,10 @@ func main() {
 		}
 
 		for i, result := range results {
-			prettyResult, _ := easy.PrettyPrint(result)
+			prettyResult, err := easy.PrettyPrint(result)
+			if err != nil {
+				log.Fatalf("Failed to format result for input %d: %v", i+1, err)
+			}
 			fmt.Printf("Result for input %d: '%s'\n%s\n\n", i+1, inputs[i], prettyResult)
 		}
 	}
