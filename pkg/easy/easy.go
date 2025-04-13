@@ -149,14 +149,16 @@ func (w *ProcessorWrapper) Process(input string) (map[string]interface{}, error)
 	// Extract processor results based on processor type
 	if procInfo, ok := result.ProcessingInfo[w.procType]; ok {
 		if resultMap, ok := procInfo.(map[string]interface{}); ok {
-			return resultMap, nil
+			// Clean the response in case it contains JSON in a response field
+			return CleanLLMResponse(resultMap), nil
 		}
 	}
 
 	// Return content as is if no specific processing info is available
 	if result.ContentType == "json" {
 		if contentMap, ok := result.Content.(map[string]interface{}); ok {
-			return contentMap, nil
+			// Clean the response in case it contains JSON in a response field
+			return CleanLLMResponse(contentMap), nil
 		}
 	}
 
@@ -197,7 +199,8 @@ func (w *ProcessorWrapper) ProcessBatch(inputs []string, concurrency int) ([]map
 		// Extract processor results based on processor type
 		if procInfo, ok := result.ProcessingInfo[w.procType]; ok {
 			if resultMap, ok := procInfo.(map[string]interface{}); ok {
-				outputResults[i] = resultMap
+				// Clean the response in case it contains JSON in a response field
+				outputResults[i] = CleanLLMResponse(resultMap)
 				continue
 			}
 		}
@@ -205,7 +208,8 @@ func (w *ProcessorWrapper) ProcessBatch(inputs []string, concurrency int) ([]map
 		// Return content as is if no specific processing info is available
 		if result.ContentType == "json" {
 			if contentMap, ok := result.Content.(map[string]interface{}); ok {
-				outputResults[i] = contentMap
+				// Clean the response in case it contains JSON in a response field
+				outputResults[i] = CleanLLMResponse(contentMap)
 				continue
 			}
 		}
