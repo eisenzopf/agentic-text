@@ -42,68 +42,6 @@ func (r *RequiredAttributesResult) DefaultValues() map[string]interface{} {
 	}
 }
 
-// ValidateAttributes returns a transform function for validating attributes
-func (r *RequiredAttributesResult) ValidateAttributes() func(interface{}) interface{} {
-	return func(val interface{}) interface{} {
-		// Try to convert the value to a slice of attributes
-		var attributesRaw []interface{}
-
-		// Handle different ways the LLM might return data
-		switch v := val.(type) {
-		case []interface{}:
-			// Direct array of attributes
-			attributesRaw = v
-		case map[string]interface{}:
-			// Attributes in a nested "attributes" field
-			if attrs, ok := v["attributes"].([]interface{}); ok {
-				attributesRaw = attrs
-			} else {
-				return defaultRequiredAttributes
-			}
-		default:
-			return defaultRequiredAttributes
-		}
-
-		// If no attributes, return default
-		if len(attributesRaw) == 0 {
-			return defaultRequiredAttributes
-		}
-
-		// Process each attribute to ensure it has the right structure
-		validAttributes := make([]AttributeDefinition, 0, len(attributesRaw))
-		for _, attrRaw := range attributesRaw {
-			attrMap, ok := attrRaw.(map[string]interface{})
-			if !ok {
-				continue // Skip invalid entries
-			}
-
-			// Ensure required fields exist and have values
-			fieldName := GetStringValue(attrMap, "field_name")
-			if fieldName == "" {
-				continue // Skip attributes without a field name
-			}
-
-			// Create a valid AttributeDefinition
-			attr := AttributeDefinition{
-				FieldName:   fieldName,
-				Title:       GetStringValue(attrMap, "title"),
-				Description: GetStringValue(attrMap, "description"),
-				Rationale:   GetStringValue(attrMap, "rationale"),
-			}
-
-			// Add the validated attribute
-			validAttributes = append(validAttributes, attr)
-		}
-
-		// If no valid attributes were found, use default
-		if len(validAttributes) == 0 {
-			return defaultRequiredAttributes
-		}
-
-		return validAttributes
-	}
-}
-
 // RequiredAttributesPrompt is a prompt generator for required attributes
 type RequiredAttributesPrompt struct{}
 
