@@ -283,13 +283,24 @@ func (p *DebugPromptGenerator) GeneratePrompt(ctx context.Context, text string) 
 
 // init registers the standard and debug processors
 func init() {
-	// Register the standard processor
+	// Register the standard processor using the new validation approach
 	RegisterGenericProcessor(
 		"required_attributes",       // name
 		[]string{"text", "json"},    // contentTypes
 		&RequiredAttributesResult{}, // resultStruct
 		&RequiredAttributesPrompt{}, // promptGenerator
 		nil,                         // no custom initialization needed
+		map[string]interface{}{ // validation options
+			"field_name": "attributes",
+			"default_value": []AttributeDefinition{
+				{
+					FieldName:   "unknown",
+					Title:       "Unknown",
+					Description: "Unable to determine required attributes from the response",
+					Rationale:   "The response did not contain valid attribute definitions",
+				},
+			},
+		},
 	)
 
 	// Register a debug version to help diagnose issues

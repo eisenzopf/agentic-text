@@ -99,12 +99,16 @@ func (p *AttributePrompt) GeneratePrompt(ctx context.Context, text string) (stri
 
 // Register the processor with the registry
 func init() {
-	// Register the attribute processor using the generic processor registration
+	// Register the attribute processor using the generic processor registration with validation
 	RegisterGenericProcessor(
 		"get_attributes",         // name
 		[]string{"text", "json"}, // contentTypes
 		&AttributeResult{},       // resultStruct
 		&AttributePrompt{},       // promptGenerator
 		nil,                      // no custom initialization needed
+		map[string]interface{}{ // validation options
+			"field_name":    "attributes",
+			"default_value": []Attribute{},
+		},
 	)
 }

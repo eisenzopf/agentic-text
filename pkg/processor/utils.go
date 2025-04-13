@@ -116,3 +116,50 @@ func populateSampleValues(value reflect.Value) {
 		}
 	}
 }
+
+// ValidateData is a generic validation function that ensures data returned from LLM responses
+// is properly structured before being used in the application
+func ValidateData(fieldName string, defaultValue interface{}) func(interface{}) interface{} {
+	return func(val interface{}) interface{} {
+		// Handle different ways the LLM might return data
+		switch v := val.(type) {
+		case []interface{}:
+			// Direct array format
+			if len(v) == 0 {
+				return defaultValue
+			}
+
+			// Validate items in the array if they're maps
+			validItems := make([]interface{}, 0, len(v))
+			for _, item := range v {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					// Ensure required field exists
+					if GetStringValue(itemMap, fieldName) != "" {
+						validItems = append(validItems, itemMap)
+					}
+				}
+			}
+
+			if len(validItems) == 0 {
+				return defaultValue
+			}
+			return validItems
+
+		case map[string]interface{}:
+			// Check if data is in a nested field
+			if nestedData, ok := v[fieldName].([]interface{}); ok {
+				return ValidateData(fieldName, defaultValue)(nestedData)
+			}
+
+			// If field name exists directly in the map
+			if GetStringValue(v, fieldName) != "" {
+				return v
+			}
+
+			return defaultValue
+
+		default:
+			return defaultValue
+		}
+	}
+}
