@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/eisenzopf/agentic-text/pkg/easy"
+	// Import the builtin package for registration
+	_ "github.com/eisenzopf/agentic-text/pkg/processor/builtin"
 )
 
 func main() {

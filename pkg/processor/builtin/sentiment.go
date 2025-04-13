@@ -1,8 +1,10 @@
-package processor
+package builtin
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
 
 // SentimentResult contains the sentiment analysis results
@@ -62,7 +64,7 @@ func (p *SentimentPrompt) GeneratePrompt(ctx context.Context, text string) (stri
 // Register the processor with the registry
 func init() {
 	// Register the sentiment processor using the generic processor registration
-	RegisterGenericProcessor(
+	processor.RegisterGenericProcessor(
 		"sentiment",        // name
 		[]string{"text"},   // contentTypes
 		&SentimentResult{}, // resultStruct

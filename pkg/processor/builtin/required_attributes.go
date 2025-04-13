@@ -1,4 +1,4 @@
-package processor
+package builtin
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/eisenzopf/agentic-text/pkg/llm"
+	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
 
 // AttributeDefinition represents a data attribute definition
@@ -49,7 +50,7 @@ type RequiredAttributesPrompt struct{}
 func (p *RequiredAttributesPrompt) GeneratePrompt(ctx context.Context, text string) (string, error) {
 	// Generate example JSON from the result struct
 	exampleResult := &RequiredAttributesResult{}
-	jsonExample := GenerateJSONExample(exampleResult)
+	jsonExample := processor.GenerateJSONExample(exampleResult)
 
 	return fmt.Sprintf(`**Role:** You are an expert data analyst that ONLY outputs valid JSON.
 
@@ -77,10 +78,10 @@ func (p *RequiredAttributesPrompt) GeneratePrompt(ctx context.Context, text stri
 func RegisterDebugHandler() {
 	// Register a custom initializer for the required_attributes processor
 	// This adds debugging to help track what's happening
-	Register("required_attributes", func(provider llm.Provider, options Options) (Processor, error) {
+	processor.Register("required_attributes", func(provider llm.Provider, options processor.Options) (processor.Processor, error) {
 		// Create a modified response handler that includes debugging
 		responseHandler := &DebugResponseHandler{
-			BaseHandler: &BaseResponseHandler{
+			BaseHandler: &processor.BaseResponseHandler{
 				ProcessorType: "required_attributes",
 				ResultStruct:  &RequiredAttributesResult{},
 			},
@@ -94,15 +95,16 @@ func RegisterDebugHandler() {
 		// Create client from provider
 		client := llm.NewProviderClient(provider)
 
-		// Create the processor with our debug handler
-		proc := &BaseProcessor{
-			name:            "required_attributes",
-			contentTypes:    []string{"text", "json"},
-			llmClient:       client,
-			promptGenerator: promptGen,
-			responseHandler: responseHandler,
-			options:         options,
-		}
+		// Create the processor using the proper API instead of accessing fields directly
+		proc := processor.NewBaseProcessor(
+			"required_attributes",
+			[]string{"text", "json"},
+			client,
+			nil, // No pre-processor
+			promptGen,
+			responseHandler,
+			options,
+		)
 
 		return proc, nil
 	})
@@ -110,7 +112,7 @@ func RegisterDebugHandler() {
 
 // DebugResponseHandler adds debugging to the processor
 type DebugResponseHandler struct {
-	BaseHandler *BaseResponseHandler
+	BaseHandler *processor.BaseResponseHandler
 }
 
 // HandleResponse implements ResponseHandler interface
@@ -150,10 +152,10 @@ func (h *DebugResponseHandler) HandleResponse(ctx context.Context, text string, 
 						if attrMap, ok := attrRaw.(map[string]interface{}); ok {
 							// Create a new attribute
 							attr := AttributeDefinition{
-								FieldName:   GetStringValue(attrMap, "field_name"),
-								Title:       GetStringValue(attrMap, "title"),
-								Description: GetStringValue(attrMap, "description"),
-								Rationale:   GetStringValue(attrMap, "rationale"),
+								FieldName:   processor.GetStringValue(attrMap, "field_name"),
+								Title:       processor.GetStringValue(attrMap, "title"),
+								Description: processor.GetStringValue(attrMap, "description"),
+								Rationale:   processor.GetStringValue(attrMap, "rationale"),
 							}
 
 							// Add it to the result if it has a field name
@@ -179,7 +181,7 @@ func (h *DebugResponseHandler) HandleResponse(ctx context.Context, text string, 
 	}
 
 	// Create a standard handler for fallback
-	handler := NewResponseHandler("required_attributes", &RequiredAttributesResult{})
+	handler := processor.NewResponseHandler("required_attributes", &RequiredAttributesResult{})
 
 	// Process the response
 	result, err := handler.AutoProcessResponse(ctx, text, responseData)
@@ -192,7 +194,7 @@ func (h *DebugResponseHandler) HandleResponse(ctx context.Context, text string, 
 
 // DebugPromptGenerator adds debugging to the prompt generator
 type DebugPromptGenerator struct {
-	BaseGenerator PromptGenerator
+	BaseGenerator processor.PromptGenerator
 }
 
 // GeneratePrompt implements PromptGenerator interface
@@ -214,7 +216,7 @@ func (p *DebugPromptGenerator) GeneratePrompt(ctx context.Context, text string) 
 // init registers the standard and debug processors
 func init() {
 	// Register the standard processor using the new validation approach
-	RegisterGenericProcessor(
+	processor.RegisterGenericProcessor(
 		"required_attributes",       // name
 		[]string{"text", "json"},    // contentTypes
 		&RequiredAttributesResult{}, // resultStruct

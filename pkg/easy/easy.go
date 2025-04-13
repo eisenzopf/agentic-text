@@ -9,6 +9,9 @@ import (
 	"github.com/eisenzopf/agentic-text/pkg/data"
 	"github.com/eisenzopf/agentic-text/pkg/llm"
 	"github.com/eisenzopf/agentic-text/pkg/processor"
+
+	// Import the builtin processors
+	_ "github.com/eisenzopf/agentic-text/pkg/processor/builtin"
 )
 
 // DefaultConfig provides sensible defaults for processor configuration

@@ -1,8 +1,10 @@
-package processor
+package builtin
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
 
 // AttributeResult contains the extracted attributes
@@ -34,7 +36,7 @@ func (r *AttributeResult) ValidateAttributes() func(interface{}) interface{} {
 		for _, attr := range attrs {
 			if attrMap, ok := attr.(map[string]interface{}); ok {
 				// Ensure it has a field_name
-				fieldName := GetStringValue(attrMap, "field_name")
+				fieldName := processor.GetStringValue(attrMap, "field_name")
 				if fieldName != "" {
 					validAttrs = append(validAttrs, attrMap)
 				}
@@ -100,7 +102,7 @@ func (p *AttributePrompt) GeneratePrompt(ctx context.Context, text string) (stri
 // Register the processor with the registry
 func init() {
 	// Register the attribute processor using the generic processor registration with validation
-	RegisterGenericProcessor(
+	processor.RegisterGenericProcessor(
 		"get_attributes",         // name
 		[]string{"text", "json"}, // contentTypes
 		&AttributeResult{},       // resultStruct

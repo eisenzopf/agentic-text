@@ -1,10 +1,39 @@
 # Agentic Text Processors
 
-This package contains processors for analyzing text using LLMs.
+This package contains a framework for creating text processors using LLMs.
+
+## Package Organization
+
+The processor package is organized into two main parts:
+- **Core Framework**: The base `processor` package provides interfaces, base implementations, and utilities for building LLM-based text processors
+- **Built-in Processors**: The `processor/builtin` package provides ready-to-use implementations for common text analysis tasks
+
+### Using Built-in Processors
+
+To use the built-in processors, import both packages:
+
+```go
+import (
+    "github.com/eisenzopf/agentic-text/pkg/processor"
+    _ "github.com/eisenzopf/agentic-text/pkg/processor/builtin" // Import for side effects (registration)
+)
+
+// Now you can create any of the built-in processors
+sentimentProc, err := processor.Create("sentiment", provider, options)
+```
+
+### Available Built-in Processors
+
+The following processors are included in the `builtin` package:
+- **sentiment**: Analyzes the sentiment of text with scores and confidence 
+- **intent**: Identifies the primary intent in customer service conversations
+- **keyword_extraction**: Extracts important keywords with relevance and categories
+- **required_attributes**: Identifies data attributes needed to answer questions
+- **get_attributes**: Extracts attribute values from text
 
 ## Generic Validation
 
-The package now supports a generic validation approach that can be used to validate data returned from LLM responses without needing to implement custom validation methods for each processor.
+The package supports a generic validation approach that can be used to validate data returned from LLM responses without needing to implement custom validation methods for each processor.
 
 ### Using Generic Validation
 
@@ -12,7 +41,7 @@ When registering a new processor, you can specify validation options to automati
 
 ```go
 // Register a processor with validation for the "attributes" field
-RegisterGenericProcessor(
+processor.RegisterGenericProcessor(
     "my_processor",         // name
     []string{"text", "json"}, // contentTypes
     &MyResultStruct{},       // resultStruct

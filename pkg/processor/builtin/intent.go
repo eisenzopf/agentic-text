@@ -1,8 +1,10 @@
-package processor
+package builtin
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
 
 // IntentResult contains the intent classification results
@@ -57,7 +59,7 @@ Conversation Transcript:
 // Register the processor with the registry
 func init() {
 	// Register the intent processor using the generic processor registration
-	RegisterGenericProcessor(
+	processor.RegisterGenericProcessor(
 		"intent",                 // name
 		[]string{"text", "json"}, // contentTypes
 		&IntentResult{},          // resultStruct

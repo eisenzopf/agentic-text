@@ -12,6 +12,9 @@ import (
 	"github.com/eisenzopf/agentic-text/pkg/data"
 	"github.com/eisenzopf/agentic-text/pkg/llm"
 	"github.com/eisenzopf/agentic-text/pkg/processor"
+
+	// Import the builtin package for processor registration
+	_ "github.com/eisenzopf/agentic-text/pkg/processor/builtin"
 )
 
 // Config represents the structure of the config.json file

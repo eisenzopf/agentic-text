@@ -1,8 +1,10 @@
-package processor
+package builtin
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
 
 // KeywordResult contains the keyword extraction results
@@ -68,7 +70,7 @@ func (p *KeywordPrompt) GeneratePrompt(ctx context.Context, text string) (string
 // Register the processor with the registry
 func init() {
 	// Register the keyword processor using generic processor registration with validation
-	RegisterGenericProcessor(
+	processor.RegisterGenericProcessor(
 		"keyword_extraction", // name
 		[]string{"text"},     // contentTypes
 		&KeywordResult{},     // resultStruct
