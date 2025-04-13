@@ -644,9 +644,66 @@ func (p *BaseProcessor) Process(ctx context.Context, item *data.ProcessItem) (*d
 				// Use the processor_type from the response
 				result.AddProcessingInfo(p.name, processedContent)
 			} else {
-				// Use the default processor_type
-				result.AddProcessingInfo(p.name, map[string]string{
-					"processor_type": "base",
+				// For struct responses, convert to map first
+				// This handles cases like SentimentResult, IntentResult, etc.
+				if reflect.TypeOf(processedContent) != nil && reflect.TypeOf(processedContent).Kind() == reflect.Ptr {
+					// Use reflection to convert struct to map
+					val := reflect.ValueOf(processedContent).Elem()
+					if val.Kind() == reflect.Struct {
+						structMap := make(map[string]interface{})
+						structType := val.Type()
+
+						// First see if struct has a ProcessorType field
+						var hasProcessorType bool
+						var processorTypeValue string
+
+						// Check each field in the struct
+						for i := 0; i < val.NumField(); i++ {
+							field := structType.Field(i)
+
+							// Get the field's JSON tag
+							tag := field.Tag.Get("json")
+							if tag == "" {
+								tag = strings.ToLower(field.Name)
+							} else {
+								tag = strings.Split(tag, ",")[0]
+							}
+
+							// Skip if the tag is "-" (meaning don't include in JSON)
+							if tag == "-" {
+								continue
+							}
+
+							// Get the field value
+							fieldValue := val.Field(i).Interface()
+							structMap[tag] = fieldValue
+
+							// Check if this is the processor_type field
+							if tag == "processor_type" {
+								hasProcessorType = true
+								if strValue, ok := fieldValue.(string); ok {
+									processorTypeValue = strValue
+								}
+							}
+						}
+
+						// If the struct has a processor_type, use it
+						if hasProcessorType && processorTypeValue != "" {
+							result.AddProcessingInfo(p.name, structMap)
+							result.Content = processedContent // Keep the original content
+						} else {
+							// Add the processor type to the map
+							structMap["processor_type"] = p.name
+							result.AddProcessingInfo(p.name, structMap)
+						}
+
+						return result, nil
+					}
+				}
+
+				// If not a struct or conversion failed, use the default processor_type
+				result.AddProcessingInfo(p.name, map[string]interface{}{
+					"processor_type": p.name,
 				})
 			}
 		} else {
@@ -660,15 +717,15 @@ func (p *BaseProcessor) Process(ctx context.Context, item *data.ProcessItem) (*d
 				result.ContentType = "json"
 			}
 
-			// Add processing info with default processor_type
-			result.AddProcessingInfo(p.name, map[string]string{
-				"processor_type": "base",
+			// Add processing info with the proper processor type for non-LLM processing
+			result.AddProcessingInfo(p.name, map[string]interface{}{
+				"processor_type": p.name,
 			})
 		}
 	} else {
-		// Add processing info with default processor_type for non-LLM processing
-		result.AddProcessingInfo(p.name, map[string]string{
-			"processor_type": "base",
+		// Add processing info with the proper processor type for non-LLM processing
+		result.AddProcessingInfo(p.name, map[string]interface{}{
+			"processor_type": p.name,
 		})
 	}
 

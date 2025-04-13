@@ -8,13 +8,11 @@ import (
 	"strings"
 
 	"github.com/eisenzopf/agentic-text/pkg/easy"
-	"github.com/eisenzopf/agentic-text/pkg/llm"
 )
 
 func main() {
 	// Default values
 	processorType := "sentiment"
-	debugMode := false
 
 	// Parse command line arguments
 	args := os.Args[1:]
@@ -26,9 +24,7 @@ func main() {
 	// Extract flags and collect non-flag arguments
 	var inputs []string
 	for i := 0; i < len(args); i++ {
-		if args[i] == "-debug" || args[i] == "--debug" {
-			debugMode = true
-		} else if args[i] == "-h" || args[i] == "--help" {
+		if args[i] == "-h" || args[i] == "--help" {
 			printUsage()
 			return
 		} else if strings.HasPrefix(args[i], "-") {
@@ -60,18 +56,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create configuration if debug mode is enabled
-	var config *easy.Config
-	if debugMode {
-		config = &easy.Config{
-			Provider:    llm.Google,
-			Model:       "gemini-2.0-flash",
-			MaxTokens:   1024,
-			Temperature: 0.2,
-			Debug:       true,
-		}
-	}
-
 	if len(inputs) == 0 {
 		// No input provided, use default
 		inputs = append(inputs, "I absolutely love this product")
@@ -85,15 +69,7 @@ func main() {
 		// Single input mode
 		fmt.Printf("Processing single input: '%s'\n\n", inputs[0])
 
-		var result map[string]interface{}
-		var err error
-
-		if debugMode {
-			result, err = easy.ProcessTextWithConfig(inputs[0], processorType, config)
-		} else {
-			result, err = easy.ProcessText(inputs[0], processorType)
-		}
-
+		result, err := easy.ProcessText(inputs[0], processorType)
 		if err != nil {
 			log.Fatalf("Processing failed: %v", err)
 		}
@@ -107,21 +83,7 @@ func main() {
 		// Batch mode
 		fmt.Printf("Batch processing %d inputs\n\n", len(inputs))
 
-		var results []map[string]interface{}
-		var err error
-
-		if debugMode {
-			// Create a wrapper with config for batch processing
-			wrapper, err := easy.NewWithConfig(processorType, config)
-			if err != nil {
-				log.Fatalf("Failed to create processor: %v", err)
-			}
-
-			results, err = wrapper.ProcessBatch(inputs, 2) // Use concurrency of 2
-		} else {
-			results, err = easy.ProcessBatchText(inputs, processorType, 2) // Use concurrency of 2
-		}
-
+		results, err := easy.ProcessBatchText(inputs, processorType, 2) // Use concurrency of 2
 		if err != nil {
 			log.Fatalf("Batch processing failed: %v", err)
 		}
@@ -151,7 +113,6 @@ func printUsage() {
 	fmt.Printf(`Usage: %s [options] processor_type [input1] [input2] ...
 
 Options:
-  -debug, --debug    Enable debug mode to see prompts and raw responses
   -h, --help         Show this help message
 
 Processor Types: %v
@@ -159,11 +120,10 @@ Processor Types: %v
 Examples:
   %s sentiment "I love this product"
   %s intent "I want to cancel my subscription"
-  %s sentiment -debug "I love this product"
   
   # Batch processing multiple inputs
   %s sentiment "I love this product" "This product is terrible" "It is okay I guess"
   
 If no input is provided, it defaults to "I absolutely love this product"
-`, progName, easy.ListAvailableProcessors(), progName, progName, progName, progName)
+`, progName, easy.ListAvailableProcessors(), progName, progName, progName)
 }

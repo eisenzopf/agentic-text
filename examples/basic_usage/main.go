@@ -24,6 +24,9 @@ type Config struct {
 }
 
 func main() {
+	// Initialize all the built-in processors
+	processor.InitializeBuiltInProcessors()
+
 	// Define command-line flags
 	processorType := flag.String("processor", "sentiment", "The type of processor to use (sentiment, etc.)")
 	batchMode := flag.Bool("batch", false, "Process multiple text inputs as a batch")
@@ -130,8 +133,13 @@ func main() {
 		log.Fatalf("Failed to initialize provider: %v", err)
 	}
 
+	// Create processor options with the LLM options
+	processorOptions := processor.Options{
+		LLMOptions: providerConfig.Options,
+	}
+
 	// Create a processor
-	proc, err := processor.Create(*processorType, provider, processor.Options{})
+	proc, err := processor.Create(*processorType, provider, processorOptions)
 	if err != nil {
 		log.Fatalf("Failed to get processor: %v", err)
 	}
@@ -185,8 +193,10 @@ func main() {
 
 			// Get processor data from ProcessingInfo
 			var outputData interface{}
-			if result.ProcessingInfo != nil {
-				// Take the data from the last processor in the chain
+			if result.ContentType == "json" {
+				outputData = result.Content
+			} else if result.ProcessingInfo != nil {
+				// Take the data from the processor if ContentType is not JSON
 				for _, procInfo := range result.ProcessingInfo {
 					outputData = procInfo
 				}
@@ -206,9 +216,11 @@ func main() {
 				}
 			}
 
-			// If we have structured result data in content and it's JSON type, use that
-			if result.ContentType == "json" {
-				outputData = result.Content
+			// Ensure processor_type is set correctly
+			if outputMap, ok := outputData.(map[string]interface{}); ok {
+				// Force the processor_type to match the requested processor
+				outputMap["processor_type"] = *processorType
+				outputData = outputMap
 			}
 
 			jsonData, _ := json.MarshalIndent(outputData, "", "  ")
@@ -227,10 +239,12 @@ func main() {
 			log.Fatalf("Processing failed: %v", err)
 		}
 
-		// Get processor data from ProcessingInfo
+		// Use the Content field directly when ContentType is JSON
 		var outputData interface{}
-		if result.ProcessingInfo != nil {
-			// Take the data from the processor
+		if result.ContentType == "json" {
+			outputData = result.Content
+		} else if result.ProcessingInfo != nil {
+			// Take the data from the processor if ContentType is not JSON
 			for _, procInfo := range result.ProcessingInfo {
 				outputData = procInfo
 			}
@@ -272,6 +286,7 @@ func main() {
 			}
 		}
 
+		// Directly marshal the Content field to JSON
 		jsonData, _ := json.MarshalIndent(outputData, "", "  ")
 		fmt.Println(string(jsonData))
 	}
