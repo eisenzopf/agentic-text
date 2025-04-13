@@ -25,33 +25,25 @@ type RequiredAttributesResult struct {
 	ProcessorType string `json:"processor_type"`
 }
 
+// defaultRequiredAttributes defines the default attributes used when no valid attributes are found
+var defaultRequiredAttributes = []AttributeDefinition{
+	{
+		FieldName:   "unknown",
+		Title:       "Unknown",
+		Description: "Unable to determine required attributes from the response",
+		Rationale:   "The response did not contain valid attribute definitions",
+	},
+}
+
 // DefaultValues returns the default values for this result type
 func (r *RequiredAttributesResult) DefaultValues() map[string]interface{} {
-	defaultAttr := []AttributeDefinition{
-		{
-			FieldName:   "unknown",
-			Title:       "Unknown",
-			Description: "Unable to determine required attributes from the response",
-			Rationale:   "The response did not contain valid attribute definitions",
-		},
-	}
-
 	return map[string]interface{}{
-		"attributes": defaultAttr,
+		"attributes": defaultRequiredAttributes,
 	}
 }
 
 // ValidateAttributes returns a transform function for validating attributes
 func (r *RequiredAttributesResult) ValidateAttributes() func(interface{}) interface{} {
-	defaultAttr := []AttributeDefinition{
-		{
-			FieldName:   "unknown",
-			Title:       "Unknown",
-			Description: "Unable to determine required attributes from the response",
-			Rationale:   "The response did not contain valid attribute definitions",
-		},
-	}
-
 	return func(val interface{}) interface{} {
 		// Try to convert the value to a slice of attributes
 		var attributesRaw []interface{}
@@ -66,15 +58,15 @@ func (r *RequiredAttributesResult) ValidateAttributes() func(interface{}) interf
 			if attrs, ok := v["attributes"].([]interface{}); ok {
 				attributesRaw = attrs
 			} else {
-				return defaultAttr
+				return defaultRequiredAttributes
 			}
 		default:
-			return defaultAttr
+			return defaultRequiredAttributes
 		}
 
 		// If no attributes, return default
 		if len(attributesRaw) == 0 {
-			return defaultAttr
+			return defaultRequiredAttributes
 		}
 
 		// Process each attribute to ensure it has the right structure
@@ -105,7 +97,7 @@ func (r *RequiredAttributesResult) ValidateAttributes() func(interface{}) interf
 
 		// If no valid attributes were found, use default
 		if len(validAttributes) == 0 {
-			return defaultAttr
+			return defaultRequiredAttributes
 		}
 
 		return validAttributes
@@ -291,15 +283,8 @@ func init() {
 		&RequiredAttributesPrompt{}, // promptGenerator
 		nil,                         // no custom initialization needed
 		map[string]interface{}{ // validation options
-			"field_name": "attributes",
-			"default_value": []AttributeDefinition{
-				{
-					FieldName:   "unknown",
-					Title:       "Unknown",
-					Description: "Unable to determine required attributes from the response",
-					Rationale:   "The response did not contain valid attribute definitions",
-				},
-			},
+			"field_name":    "attributes",
+			"default_value": defaultRequiredAttributes,
 		},
 	)
 
