@@ -16,9 +16,75 @@ type AttributeDefinition struct {
 // RequiredAttributesResult contains the required attributes results
 type RequiredAttributesResult struct {
 	// Attributes is an array of required attributes
-	Attributes []AttributeDefinition `json:"attributes"`
+	Attributes []AttributeDefinition `json:"attributes,omitempty"`
 	// ProcessorType is the type of processor that generated this result
 	ProcessorType string `json:"processor_type"`
+}
+
+// DefaultValues returns the default values for this result type
+func (r *RequiredAttributesResult) DefaultValues() map[string]interface{} {
+	defaultAttr := []AttributeDefinition{
+		{
+			FieldName:   "unknown",
+			Title:       "Unknown",
+			Description: "Unable to determine required attributes from the response",
+			Rationale:   "The response did not contain valid attribute definitions",
+		},
+	}
+
+	return map[string]interface{}{
+		"attributes": defaultAttr,
+	}
+}
+
+// ValidateAttributes returns a transform function for validating attributes
+func (r *RequiredAttributesResult) ValidateAttributes() func(interface{}) interface{} {
+	defaultAttr := []AttributeDefinition{
+		{
+			FieldName:   "unknown",
+			Title:       "Unknown",
+			Description: "Unable to determine required attributes from the response",
+			Rationale:   "The response did not contain valid attribute definitions",
+		},
+	}
+
+	return func(val interface{}) interface{} {
+		// Try to convert the value to a slice of attributes
+		attributesRaw, ok := val.([]interface{})
+		if !ok {
+			return defaultAttr
+		}
+
+		// If no attributes, return default
+		if len(attributesRaw) == 0 {
+			return defaultAttr
+		}
+
+		// Process each attribute to ensure it has the right structure
+		validAttributes := make([]interface{}, 0, len(attributesRaw))
+		for _, attrRaw := range attributesRaw {
+			attrMap, ok := attrRaw.(map[string]interface{})
+			if !ok {
+				continue // Skip invalid entries
+			}
+
+			// Ensure required fields exist and have values
+			fieldName := GetStringValue(attrMap, "field_name")
+			if fieldName == "" {
+				continue // Skip attributes without a field name
+			}
+
+			// Add the validated attribute
+			validAttributes = append(validAttributes, attrMap)
+		}
+
+		// If no valid attributes were found, use default
+		if len(validAttributes) == 0 {
+			return defaultAttr
+		}
+
+		return validAttributes
+	}
 }
 
 // RequiredAttributesPrompt is a prompt generator for required attributes

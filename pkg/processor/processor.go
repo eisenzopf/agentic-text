@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/eisenzopf/agentic-text/pkg/data"
@@ -820,90 +821,91 @@ func NewResponseHandler(processorType string, resultStruct interface{}, customDe
 
 // applyProcessorDefaults applies default values specific to each processor type
 func (h *BaseResponseHandler) applyProcessorDefaults() {
-	switch h.ProcessorType {
-	case "sentiment":
-		// Sentiment processor defaults
-		h.updateFieldMapper("sentiment", "unknown", nil)
+	// Use reflection to get processor-specific default values from the struct itself
+	if h.ResultStruct != nil {
+		structValue := reflect.ValueOf(h.ResultStruct).Elem()
+		structType := structValue.Type()
 
-	case "intent":
-		// Intent processor defaults
-		h.updateFieldMapper("label_name", "Unclear Intent", nil)
-		h.updateFieldMapper("label", "unclear_intent", nil)
-		h.updateFieldMapper("description",
-			"The conversation transcript is unclear or does not contain a discernible customer service request.",
-			nil)
-
-	case "required_attributes":
-		// Required attributes processor defaults
-		defaultAttr := []map[string]interface{}{
-			{
-				"field_name":  "unknown",
-				"title":       "Unknown",
-				"description": "Unable to determine required attributes from the response",
-				"rationale":   "The response did not contain valid attribute definitions",
-			},
+		// Look for methods on the struct to provide defaults
+		// E.g., a method named "DefaultValues() map[string]interface{}"
+		defaultsMethod := reflect.ValueOf(h.ResultStruct).MethodByName("DefaultValues")
+		if defaultsMethod.IsValid() {
+			// Call the DefaultValues method to get custom defaults
+			results := defaultsMethod.Call(nil)
+			if len(results) > 0 {
+				if defaults, ok := results[0].Interface().(map[string]interface{}); ok {
+					// Apply custom defaults from the method
+					for field, value := range defaults {
+						h.updateFieldMapper(field, value, nil)
+					}
+					return
+				}
+			}
 		}
-		h.updateFieldMapper("attributes", defaultAttr, func(val interface{}) interface{} {
-			// Try to convert the value to a slice of attributes
-			attributesRaw, ok := val.([]interface{})
-			if !ok {
-				return defaultAttr
-			}
 
-			// If no attributes, return default
-			if len(attributesRaw) == 0 {
-				return defaultAttr
-			}
+		// No custom defaults method, use reflection to scan for tags
+		for i := 0; i < structType.NumField(); i++ {
+			field := structType.Field(i)
 
-			// Process each attribute to ensure it has the right structure
-			validAttributes := make([]interface{}, 0, len(attributesRaw))
-			for _, attrRaw := range attributesRaw {
-				attrMap, ok := attrRaw.(map[string]interface{})
-				if !ok {
-					continue // Skip invalid entries
+			// Check for a "default" tag
+			defaultTag := field.Tag.Get("default")
+			if defaultTag != "" {
+				// Get the field's JSON name
+				jsonTag := field.Tag.Get("json")
+				fieldName := strings.ToLower(field.Name)
+				if jsonTag != "" {
+					// Extract the name part of the tag (before any comma)
+					fieldName = strings.Split(jsonTag, ",")[0]
 				}
 
-				// Ensure required fields exist and have values
-				fieldName := GetStringValue(attrMap, "field_name")
-				if fieldName == "" {
-					continue // Skip attributes without a field name
+				// Convert the default value based on field type
+				var defaultValue interface{}
+				switch field.Type.Kind() {
+				case reflect.String:
+					defaultValue = defaultTag
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					if val, err := strconv.ParseInt(defaultTag, 10, 64); err == nil {
+						defaultValue = val
+					}
+				case reflect.Float32, reflect.Float64:
+					if val, err := strconv.ParseFloat(defaultTag, 64); err == nil {
+						defaultValue = val
+					}
+				case reflect.Bool:
+					if val, err := strconv.ParseBool(defaultTag); err == nil {
+						defaultValue = val
+					}
 				}
 
-				// Add the validated attribute
-				validAttributes = append(validAttributes, attrMap)
+				if defaultValue != nil {
+					h.updateFieldMapper(fieldName, defaultValue, nil)
+				}
 			}
+		}
 
-			// If no valid attributes were found, use default
-			if len(validAttributes) == 0 {
-				return defaultAttr
-			}
+		// Special handling for complex field types that can't be handled by tags
+		// Look for validator/transform methods for specific fields
+		// E.g. a method named "ValidateAttributes() interface{}"
+		for fieldName := range h.Fields {
+			// Build the validator method name: "Validate" + Title case field name
+			methodName := "Validate" + strings.Title(fieldName)
+			validatorMethod := reflect.ValueOf(h.ResultStruct).MethodByName(methodName)
 
-			return validAttributes
-		})
-
-	case "attributes":
-		// Attributes processor defaults
-		h.updateFieldMapper("attributes", []interface{}{}, func(val interface{}) interface{} {
-			// Try to convert to array of attributes
-			attrs, ok := val.([]interface{})
-			if !ok {
-				return []interface{}{}
-			}
-
-			// Validate each attribute
-			validAttrs := make([]interface{}, 0, len(attrs))
-			for _, attr := range attrs {
-				if attrMap, ok := attr.(map[string]interface{}); ok {
-					// Ensure it has a field_name
-					fieldName := GetStringValue(attrMap, "field_name")
-					if fieldName != "" {
-						validAttrs = append(validAttrs, attrMap)
+			if validatorMethod.IsValid() {
+				// Call the validator method to get transform function
+				results := validatorMethod.Call(nil)
+				if len(results) > 0 {
+					if transformFn, ok := results[0].Interface().(func(interface{}) interface{}); ok {
+						// Update the field mapper with this transform function
+						defaultValue := h.Fields[fieldName].DefaultValue
+						h.Fields[fieldName] = FieldMapper{
+							DefaultValue: defaultValue,
+							Transform:    transformFn,
+						}
 					}
 				}
 			}
-
-			return validAttrs
-		})
+		}
 	}
 }
 
@@ -970,8 +972,13 @@ func (h *BaseResponseHandler) createDefaultResponse() map[string]interface{} {
 		case reflect.Bool:
 			defaultValue = false
 		case reflect.Slice:
-			// Create an empty slice of the appropriate type
-			defaultValue = reflect.MakeSlice(field.Type, 0, 0).Interface()
+			// Special handling for "attributes" fields - always use an empty slice instead of null
+			if tag == "attributes" {
+				defaultValue = []interface{}{} // Force empty array instead of null for attributes
+			} else {
+				// Create an empty slice of the appropriate type
+				defaultValue = reflect.MakeSlice(field.Type, 0, 0).Interface()
+			}
 		case reflect.Map:
 			// Create an empty map of the appropriate type
 			defaultValue = reflect.MakeMap(field.Type).Interface()

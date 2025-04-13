@@ -8,13 +8,22 @@ import (
 // IntentResult contains the intent classification results
 type IntentResult struct {
 	// LabelName is a natural language label describing the customer's primary intent (title case)
-	LabelName string `json:"label_name"`
+	LabelName string `json:"label_name" default:"Unclear Intent"`
 	// Label is a machine-readable version of LabelName (snake_case)
-	Label string `json:"label"`
+	Label string `json:"label" default:"unclear_intent"`
 	// Description is a concise description of the customer's primary intent
-	Description string `json:"description"`
+	Description string `json:"description" default:"The conversation transcript is unclear or does not contain a discernible customer service request."`
 	// ProcessorType is the type of processor that generated this result
 	ProcessorType string `json:"processor_type"`
+}
+
+// DefaultValues returns the default values for this result type
+func (r *IntentResult) DefaultValues() map[string]interface{} {
+	return map[string]interface{}{
+		"label_name":  "Unclear Intent",
+		"label":       "unclear_intent",
+		"description": "The conversation transcript is unclear or does not contain a discernible customer service request.",
+	}
 }
 
 // IntentPrompt is a prompt generator for intent analysis

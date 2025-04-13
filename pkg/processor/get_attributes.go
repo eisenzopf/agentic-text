@@ -8,9 +8,41 @@ import (
 // AttributeResult contains the extracted attributes
 type AttributeResult struct {
 	// Attributes is an array of extracted attributes
-	Attributes []Attribute `json:"attributes"`
+	Attributes []Attribute `json:"attributes,omitempty"`
 	// ProcessorType is the type of processor that generated this result
 	ProcessorType string `json:"processor_type"`
+}
+
+// DefaultValues returns the default values for this result type
+func (r *AttributeResult) DefaultValues() map[string]interface{} {
+	return map[string]interface{}{
+		"attributes": []Attribute{},
+	}
+}
+
+// ValidateAttributes returns a transform function for validating attributes
+func (r *AttributeResult) ValidateAttributes() func(interface{}) interface{} {
+	return func(val interface{}) interface{} {
+		// Try to convert to array of attributes
+		attrs, ok := val.([]interface{})
+		if !ok {
+			return []Attribute{}
+		}
+
+		// Validate each attribute
+		validAttrs := make([]interface{}, 0, len(attrs))
+		for _, attr := range attrs {
+			if attrMap, ok := attr.(map[string]interface{}); ok {
+				// Ensure it has a field_name
+				fieldName := GetStringValue(attrMap, "field_name")
+				if fieldName != "" {
+					validAttrs = append(validAttrs, attrMap)
+				}
+			}
+		}
+
+		return validAttrs
+	}
 }
 
 // Attribute represents a single extracted attribute
@@ -69,7 +101,7 @@ func (p *AttributePrompt) GeneratePrompt(ctx context.Context, text string) (stri
 func init() {
 	// Register the attribute processor using the generic processor registration
 	RegisterGenericProcessor(
-		"attributes",             // name
+		"get_attributes",         // name
 		[]string{"text", "json"}, // contentTypes
 		&AttributeResult{},       // resultStruct
 		&AttributePrompt{},       // promptGenerator

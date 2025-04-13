@@ -8,15 +8,25 @@ import (
 // SentimentResult contains the sentiment analysis results
 type SentimentResult struct {
 	// Sentiment is the overall sentiment (positive, negative, neutral)
-	Sentiment string `json:"sentiment"`
+	Sentiment string `json:"sentiment" default:"unknown"`
 	// Score is the sentiment score (-1.0 to 1.0)
-	Score float64 `json:"score"`
+	Score float64 `json:"score" default:"0.0"`
 	// Confidence is the confidence level (0.0 to 1.0)
-	Confidence float64 `json:"confidence"`
+	Confidence float64 `json:"confidence" default:"0.0"`
 	// Keywords are key sentiment words from the text
 	Keywords []string `json:"keywords,omitempty"`
 	// ProcessorType is the type of processor that generated this result
 	ProcessorType string `json:"processor_type"`
+}
+
+// DefaultValues returns the default values for this result type
+func (r *SentimentResult) DefaultValues() map[string]interface{} {
+	return map[string]interface{}{
+		"sentiment":  "unknown",
+		"score":      0.0,
+		"confidence": 0.0,
+		"keywords":   []string{},
+	}
 }
 
 // SentimentPrompt is a prompt generator for sentiment analysis
