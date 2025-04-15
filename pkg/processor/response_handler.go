@@ -9,6 +9,14 @@ import (
 	"strings"
 )
 
+// FieldMapper defines how to map a field from the response to the result
+type FieldMapper struct {
+	// DefaultValue is the default value to use if the field is missing
+	DefaultValue interface{}
+	// Transform is an optional function to transform the field value
+	Transform func(interface{}) interface{}
+}
+
 // BaseResponseHandler provides common response handling functionality
 type BaseResponseHandler struct {
 	ProcessorType    string
@@ -19,14 +27,6 @@ type BaseResponseHandler struct {
 	ResultStruct interface{}
 	// DynamicValidators stores dynamically added validation functions
 	DynamicValidators map[string]func(interface{}) interface{}
-}
-
-// FieldMapper defines how to map a field from the response to the result
-type FieldMapper struct {
-	// DefaultValue is the default value to use if the field is missing
-	DefaultValue interface{}
-	// Transform is an optional function to transform the field value
-	Transform func(interface{}) interface{}
 }
 
 // CleanResponseString removes markdown code blocks from a response string

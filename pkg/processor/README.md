@@ -1,6 +1,102 @@
-# Agentic Text Processors
+# Processor Package
 
-This package contains a framework for creating text processors using LLMs.
+This package provides a framework for creating text processing pipelines using LLMs.
+
+## Package Structure
+
+The processor package is split into multiple files to make it more maintainable:
+
+- `interfaces.go`: Core interfaces for processors
+- `base_processor.go`: Base implementation of processor interface
+- `generic_processor.go`: Generic processor with standard response handling
+- `response_handler.go`: LLM response handling functionality
+- `json_utils.go`: JSON utilities for handling structured data
+- `validation.go`: Validation functions for LLM responses
+- `registry.go`: Processor registration and creation
+- `utils.go`: Common utility functions
+- `processor.go`: Initialization and registration logic
+
+## Creating a Custom Processor
+
+Here's a simple example of creating a custom processor:
+
+```go
+package myprocessors
+
+import (
+	"context"
+	
+	"github.com/eisenzopf/agentic-text/pkg/processor"
+	"github.com/eisenzopf/agentic-text/pkg/llm"
+)
+
+// SentimentResult defines the structure of sentiment analysis results
+type SentimentResult struct {
+	ProcessorType string  `json:"processor_type"`
+	Sentiment     string  `json:"sentiment"`
+	Score         float64 `json:"score"`
+}
+
+// SentimentPromptGenerator generates prompts for sentiment analysis
+type SentimentPromptGenerator struct{}
+
+func (g *SentimentPromptGenerator) GeneratePrompt(ctx context.Context, text string) (string, error) {
+	return `Analyze the sentiment of the following text. 
+	Return a JSON object with "sentiment" (either "positive", "negative", or "neutral") 
+	and "score" (a value between -1.0 and 1.0, where -1.0 is very negative and 1.0 is very positive):
+	
+	TEXT: ` + text, nil
+}
+
+func init() {
+	// Register the sentiment processor
+	processor.RegisterGenericProcessor(
+		"sentiment",
+		[]string{"text"},
+		&SentimentResult{},
+		&SentimentPromptGenerator{},
+		nil, // No custom init
+	)
+}
+```
+
+## Using Processors
+
+```go
+import (
+	"context"
+	
+	"github.com/eisenzopf/agentic-text/pkg/data"
+	"github.com/eisenzopf/agentic-text/pkg/llm"
+	"github.com/eisenzopf/agentic-text/pkg/processor"
+	_ "myapp/myprocessors" // Import for side effects (registration)
+)
+
+func main() {
+	// Create a processor
+	p, err := processor.Create("sentiment", llm.NewOpenAIProvider(), processor.Options{})
+	if err != nil {
+		panic(err)
+	}
+	
+	// Create a process item
+	item := &data.ProcessItem{
+		ID:          "1",
+		Content:     "I really enjoyed this product! It works great!",
+		ContentType: "text",
+	}
+	
+	// Process the item
+	result, err := p.Process(context.Background(), item)
+	if err != nil {
+		panic(err)
+	}
+	
+	// Use the result
+	// The content will be a SentimentResult struct
+	fmt.Printf("Sentiment: %+v\n", result.Content)
+}
+```
 
 ## Package Organization
 
