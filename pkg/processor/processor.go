@@ -89,25 +89,58 @@ type FieldMapper struct {
 // CleanResponseString removes markdown code blocks from a response string
 func (h *BaseResponseHandler) CleanResponseString(response string) string {
 	cleanResponse := response
+
 	// Handle multi-line strings with different code block formats
 	if strings.Contains(cleanResponse, "```") {
-		// Try to extract content from code blocks with language specifiers
+		// Try multiple strategies to extract code blocks
+
+		// Strategy 1: Extract from ```json blocks
 		if strings.Contains(cleanResponse, "```json") {
-			// Find all content between ```json and ``` markers
 			parts := strings.Split(cleanResponse, "```json")
 			if len(parts) > 1 {
 				codeContent := parts[1]
 				endPos := strings.Index(codeContent, "```")
 				if endPos != -1 {
 					cleanResponse = strings.TrimSpace(codeContent[:endPos])
+					return cleanResponse
 				}
 			}
-		} else {
-			// Try to extract content from generic code blocks
-			parts := strings.Split(cleanResponse, "```")
-			if len(parts) >= 3 { // At least one complete code block
-				// Take the content of the first code block
-				cleanResponse = strings.TrimSpace(parts[1])
+		}
+
+		// Strategy 2: Look for any language specifier
+		languageSpecifiers := []string{"```javascript", "```js", "```python", "```go", "```java", "```typescript", "```ts"}
+		for _, specifier := range languageSpecifiers {
+			if strings.Contains(cleanResponse, specifier) {
+				parts := strings.Split(cleanResponse, specifier)
+				if len(parts) > 1 {
+					codeContent := parts[1]
+					endPos := strings.Index(codeContent, "```")
+					if endPos != -1 {
+						cleanResponse = strings.TrimSpace(codeContent[:endPos])
+						return cleanResponse
+					}
+				}
+			}
+		}
+
+		// Strategy 3: Extract content from generic code blocks
+		parts := strings.Split(cleanResponse, "```")
+		if len(parts) >= 3 { // At least one complete code block
+			// Take the content of the first code block
+			cleanResponse = strings.TrimSpace(parts[1])
+			return cleanResponse
+		}
+
+		// Strategy 4: If all else fails, try to find JSON between the first { and last }
+		jsonStartIndex := strings.Index(cleanResponse, "{")
+		jsonEndIndex := strings.LastIndex(cleanResponse, "}")
+
+		if jsonStartIndex != -1 && jsonEndIndex != -1 && jsonEndIndex > jsonStartIndex {
+			potentialJSON := cleanResponse[jsonStartIndex : jsonEndIndex+1]
+			// Verify it's valid JSON
+			var testJSON map[string]interface{}
+			if err := json.Unmarshal([]byte(potentialJSON), &testJSON); err == nil {
+				return potentialJSON
 			}
 		}
 	} else {
@@ -116,7 +149,21 @@ func (h *BaseResponseHandler) CleanResponseString(response string) string {
 			cleanResponse = cleanResponse[1 : len(cleanResponse)-1]
 			cleanResponse = strings.TrimSpace(cleanResponse)
 		}
+
+		// Handle potential JSON without code blocks
+		jsonStartIndex := strings.Index(cleanResponse, "{")
+		jsonEndIndex := strings.LastIndex(cleanResponse, "}")
+
+		if jsonStartIndex != -1 && jsonEndIndex != -1 && jsonEndIndex > jsonStartIndex {
+			potentialJSON := cleanResponse[jsonStartIndex : jsonEndIndex+1]
+			// Verify it's valid JSON
+			var testJSON map[string]interface{}
+			if err := json.Unmarshal([]byte(potentialJSON), &testJSON); err == nil {
+				return potentialJSON
+			}
+		}
 	}
+
 	return cleanResponse
 }
 
@@ -433,6 +480,60 @@ func (h *BaseResponseHandler) mapSlice(value interface{}, field reflect.Value) {
 				newSlice.Index(i).SetString(s)
 			}
 			field.Set(newSlice)
+		}
+	} else if field.Type().Elem().Kind() == reflect.Struct {
+		// Handle slice of structs (like []AttributeDefinition)
+		if items, ok := value.([]interface{}); ok && len(items) > 0 {
+			// Create a new slice of the appropriate struct type
+			elemType := field.Type().Elem()
+			newSlice := reflect.MakeSlice(field.Type(), 0, len(items))
+
+			// Process each item in the array
+			for _, item := range items {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					// Create a new struct of the appropriate type
+					newStruct := reflect.New(elemType).Elem()
+
+					// Map fields from the map to the struct
+					for i := 0; i < elemType.NumField(); i++ {
+						structField := elemType.Field(i)
+
+						// Get JSON tag name
+						tag := structField.Tag.Get("json")
+						if tag == "" {
+							tag = strings.ToLower(structField.Name)
+						} else {
+							tag = strings.Split(tag, ",")[0]
+						}
+
+						// Find the value in the map
+						if mapValue, exists := itemMap[tag]; exists && mapValue != nil {
+							fieldValue := newStruct.Field(i)
+
+							// Only set if field is settable
+							if !fieldValue.CanSet() {
+								continue
+							}
+
+							// Convert and set the value
+							if h.mapValueToField(mapValue, fieldValue) {
+								// Value was set successfully
+								continue
+							}
+
+							// For complex types, might need additional handling here
+						}
+					}
+
+					// Add the new struct to the slice
+					newSlice = reflect.Append(newSlice, newStruct)
+				}
+			}
+
+			// Only set the field if we have elements
+			if newSlice.Len() > 0 {
+				field.Set(newSlice)
+			}
 		}
 	}
 }

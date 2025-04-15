@@ -63,8 +63,5 @@ func init() {
 		&RequiredAttributesResult{}, // resultStruct
 		&RequiredAttributesPrompt{}, // promptGenerator
 		nil,                         // no custom initialization needed
-		map[string]interface{}{ // validation options
-			"field_name": "attributes",
-		},
 	)
 }
