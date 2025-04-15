@@ -946,68 +946,24 @@ func (h *BaseResponseHandler) createDefaultResponse() map[string]interface{} {
 		return map[string]interface{}{"processor_type": h.ProcessorType}
 	}
 
-	// Use reflection to build default response map
-	result := map[string]interface{}{"processor_type": h.ProcessorType}
-
-	// Get the struct value and type
-	structValue := reflect.ValueOf(h.ResultStruct).Elem()
-	structType := structValue.Type()
-
-	// Iterate over struct fields
-	for i := 0; i < structType.NumField(); i++ {
-		field := structType.Field(i)
-
-		// Get the JSON tag name
-		tag := field.Tag.Get("json")
-		if tag == "" {
-			// No JSON tag, use field name in lowercase
-			tag = strings.ToLower(field.Name)
-		} else {
-			// Extract the name part of the tag (before any comma)
-			tag = strings.Split(tag, ",")[0]
-		}
-
-		// Skip processor_type as we already included it
-		if tag == "processor_type" {
-			continue
-		}
-
-		// Get a zero/default value for this field type
-		var defaultValue interface{}
-
-		switch field.Type.Kind() {
-		case reflect.String:
-			defaultValue = ""
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			defaultValue = int64(0)
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			defaultValue = uint64(0)
-		case reflect.Float32, reflect.Float64:
-			defaultValue = float64(0)
-		case reflect.Bool:
-			defaultValue = false
-		case reflect.Slice:
-			// Special handling for "attributes" fields - always use an empty slice instead of null
-			if tag == "attributes" {
-				defaultValue = []interface{}{} // Force empty array instead of null for attributes
-			} else {
-				// Create an empty slice of the appropriate type
-				defaultValue = reflect.MakeSlice(field.Type, 0, 0).Interface()
+	// Check if the struct has a DefaultValues method
+	defaultsMethod := reflect.ValueOf(h.ResultStruct).MethodByName("DefaultValues")
+	if defaultsMethod.IsValid() {
+		// Call the DefaultValues method to get custom defaults
+		results := defaultsMethod.Call(nil)
+		if len(results) > 0 {
+			if defaults, ok := results[0].Interface().(map[string]interface{}); ok {
+				// Add processor_type
+				defaults["processor_type"] = h.ProcessorType
+				return defaults
 			}
-		case reflect.Map:
-			// Create an empty map of the appropriate type
-			defaultValue = reflect.MakeMap(field.Type).Interface()
-		case reflect.Struct:
-			// For embedded structs, use a nil pointer to indicate empty
-			defaultValue = nil
-		default:
-			defaultValue = nil
 		}
-
-		result[tag] = defaultValue
 	}
 
-	return result
+	// Fallback to using the general GetDefaultValues function
+	defaults := GetDefaultValues(h.ResultStruct)
+	defaults["processor_type"] = h.ProcessorType
+	return defaults
 }
 
 // configureFieldsFromStruct automatically configures field mappers from the result struct

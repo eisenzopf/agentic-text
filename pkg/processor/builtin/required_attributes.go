@@ -26,12 +26,6 @@ type RequiredAttributesResult struct {
 	ProcessorType string `json:"processor_type"`
 }
 
-// DefaultValues returns the default values for this result type
-func (r *RequiredAttributesResult) DefaultValues() map[string]interface{} {
-	// Use the new helper function to get defaults directly from struct tags
-	return processor.DefaultsFromStruct(r)
-}
-
 // RequiredAttributesPrompt is a prompt generator for required attributes
 type RequiredAttributesPrompt struct{}
 

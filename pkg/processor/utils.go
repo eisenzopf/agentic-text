@@ -14,7 +14,7 @@ func GenerateJSONExample(structType interface{}) string {
 	val := reflect.ValueOf(structType).Elem()
 	sampleStruct := reflect.New(val.Type()).Interface()
 
-	// Use reflection to populate the struct with sample values
+	// Use reflection to populate the struct with sample values based on default tags
 	populateSampleValues(reflect.ValueOf(sampleStruct).Elem())
 
 	// Marshal to a map first so we can exclude processor_type
@@ -71,37 +71,95 @@ func populateSampleValues(value reflect.Value) {
 			}
 		}
 
+		// Check for default tag value
+		defaultValue := fieldType.Tag.Get("default")
+
 		// Generate sample value based on field type
 		switch field.Kind() {
 		case reflect.String:
-			// Look for example comments in the field
-			comment := fieldType.Tag.Get("comment")
-			if comment != "" {
-				field.SetString(comment)
+			if defaultValue != "" {
+				// Use the default value if provided
+				field.SetString(defaultValue)
 			} else {
-				// Use field name as sample
-				field.SetString("Example " + fieldName)
+				// Look for example comments in the field
+				comment := fieldType.Tag.Get("comment")
+				if comment != "" {
+					field.SetString(comment)
+				} else {
+					// Use field name as sample
+					field.SetString("Example " + fieldName)
+				}
 			}
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			field.SetInt(42)
+			if defaultValue != "" {
+				// Convert default string to int
+				if intVal, err := strconv.ParseInt(defaultValue, 10, 64); err == nil {
+					field.SetInt(intVal)
+				} else {
+					field.SetInt(42) // Fallback
+				}
+			} else {
+				field.SetInt(42)
+			}
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			field.SetUint(42)
+			if defaultValue != "" {
+				// Convert default string to uint
+				if uintVal, err := strconv.ParseUint(defaultValue, 10, 64); err == nil {
+					field.SetUint(uintVal)
+				} else {
+					field.SetUint(42) // Fallback
+				}
+			} else {
+				field.SetUint(42)
+			}
 		case reflect.Float32, reflect.Float64:
-			field.SetFloat(42.5)
+			if defaultValue != "" {
+				// Convert default string to float
+				if floatVal, err := strconv.ParseFloat(defaultValue, 64); err == nil {
+					field.SetFloat(floatVal)
+				} else {
+					field.SetFloat(42.5) // Fallback
+				}
+			} else {
+				field.SetFloat(42.5)
+			}
 		case reflect.Bool:
-			field.SetBool(true)
+			if defaultValue != "" {
+				// Convert default string to bool
+				if boolVal, err := strconv.ParseBool(defaultValue); err == nil {
+					field.SetBool(boolVal)
+				} else {
+					field.SetBool(true) // Fallback
+				}
+			} else {
+				field.SetBool(true)
+			}
 		case reflect.Slice:
 			// Create a sample slice with one element
 			sliceType := field.Type().Elem()
 			sampleSlice := reflect.MakeSlice(field.Type(), 1, 1)
 
-			// If it's a slice of struct, populate the struct
+			// If it's a slice of struct, populate the struct with defaults too
 			if sliceType.Kind() == reflect.Struct {
 				populateSampleValues(sampleSlice.Index(0))
 			} else if sliceType.Kind() == reflect.String {
-				sampleSlice.Index(0).SetString("Sample string in array")
+				// For strings, use field name in example
+				if defaultValue != "" {
+					sampleSlice.Index(0).SetString(defaultValue)
+				} else {
+					sampleSlice.Index(0).SetString("Sample " + fieldName + " string")
+				}
 			} else if sliceType.Kind() == reflect.Int {
-				sampleSlice.Index(0).SetInt(42)
+				if defaultValue != "" {
+					// Try to parse default as int
+					if intVal, err := strconv.ParseInt(defaultValue, 10, 64); err == nil {
+						sampleSlice.Index(0).SetInt(intVal)
+					} else {
+						sampleSlice.Index(0).SetInt(42)
+					}
+				} else {
+					sampleSlice.Index(0).SetInt(42)
+				}
 			}
 
 			field.Set(sampleSlice)
@@ -233,6 +291,12 @@ func DefaultsFromStruct(structPtr interface{}) map[string]interface{} {
 	}
 
 	return defaults
+}
+
+// GetDefaultValues returns default values for any result struct by extracting from struct tags
+// This eliminates the need for each processor to implement its own DefaultValues() method
+func GetDefaultValues(resultStruct interface{}) map[string]interface{} {
+	return DefaultsFromStruct(resultStruct)
 }
 
 // Helper functions to parse default values
