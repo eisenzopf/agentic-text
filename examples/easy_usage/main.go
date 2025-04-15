@@ -15,6 +15,7 @@ import (
 func main() {
 	// Default values
 	processorType := "sentiment"
+	debug := false
 
 	// Parse command line arguments
 	args := os.Args[1:]
@@ -29,6 +30,8 @@ func main() {
 		if args[i] == "-h" || args[i] == "--help" {
 			printUsage()
 			return
+		} else if args[i] == "--debug" || args[i] == "-d" {
+			debug = true
 		} else if strings.HasPrefix(args[i], "-") {
 			fmt.Printf("Unknown flag: %s\n", args[i])
 			printUsage()
@@ -66,12 +69,21 @@ func main() {
 
 	fmt.Printf("Available processors: %v\n", availableProcessors)
 	fmt.Printf("Using processor: '%s'\n", processorType)
+	if debug {
+		fmt.Printf("Debug mode: enabled\n")
+	}
+
+	// Set debug option if enabled
+	options := map[string]interface{}{}
+	if debug {
+		options["debug"] = true
+	}
 
 	if len(inputs) == 1 {
 		// Single input mode
 		fmt.Printf("Processing single input: '%s'\n\n", inputs[0])
 
-		result, err := easy.ProcessText(inputs[0], processorType)
+		result, err := easy.ProcessTextWithOptions(inputs[0], processorType, options)
 		if err != nil {
 			log.Fatalf("Processing failed: %v", err)
 		}
@@ -85,7 +97,7 @@ func main() {
 		// Batch mode
 		fmt.Printf("Batch processing %d inputs\n\n", len(inputs))
 
-		results, err := easy.ProcessBatchText(inputs, processorType, 2) // Use concurrency of 2
+		results, err := easy.ProcessBatchTextWithOptions(inputs, processorType, 2, options) // Use concurrency of 2
 		if err != nil {
 			log.Fatalf("Batch processing failed: %v", err)
 		}
@@ -116,16 +128,18 @@ func printUsage() {
 
 Options:
   -h, --help         Show this help message
+  -d, --debug        Enable debug mode to see LLM requests and responses
 
 Processor Types: %v
 
 Examples:
   %s sentiment "I love this product"
   %s intent "I want to cancel my subscription"
+  %s --debug required_attributes "What data is needed to calculate customer lifetime value?"
   
   # Batch processing multiple inputs
   %s sentiment "I love this product" "This product is terrible" "It is okay I guess"
   
 If no input is provided, it defaults to "I absolutely love this product"
-`, progName, easy.ListAvailableProcessors(), progName, progName, progName)
+`, progName, easy.ListAvailableProcessors(), progName, progName, progName, progName)
 }

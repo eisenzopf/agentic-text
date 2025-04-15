@@ -614,6 +614,14 @@ func (p *BaseProcessor) Process(ctx context.Context, item *data.ProcessItem) (*d
 
 	// Run LLM processing if available
 	if p.llmClient != nil {
+		// Check if debug is enabled in options
+		debugEnabled := false
+		if p.options.LLMOptions != nil {
+			if debug, ok := p.options.LLMOptions["debug"].(bool); ok {
+				debugEnabled = debug
+			}
+		}
+
 		// Pre-process if needed
 		if p.preProcessor != nil {
 			textContent, err = p.preProcessor.PreProcess(ctx, textContent)
@@ -631,10 +639,29 @@ func (p *BaseProcessor) Process(ctx context.Context, item *data.ProcessItem) (*d
 			}
 		}
 
+		// Print debug information if enabled
+		if debugEnabled {
+			DebugLLMInteraction(prompt, "") // Print the prompt before calling LLM
+		}
+
 		// Call LLM
 		llmResponse, err := p.llmClient.Complete(ctx, prompt, p.options.LLMOptions)
 		if err != nil {
 			return nil, err
+		}
+
+		// Print debug information if enabled
+		if debugEnabled {
+			DebugLLMInteraction(prompt, llmResponse) // Print full interaction
+		}
+
+		// Store debug info in a map if debug is enabled
+		var debugInfo map[string]interface{}
+		if debugEnabled {
+			debugInfo = map[string]interface{}{
+				"prompt":       prompt,
+				"raw_response": llmResponse,
+			}
 		}
 
 		// Handle response
@@ -642,6 +669,17 @@ func (p *BaseProcessor) Process(ctx context.Context, item *data.ProcessItem) (*d
 			processedContent, err := p.responseHandler.HandleResponse(ctx, textContent, llmResponse)
 			if err != nil {
 				return nil, err
+			}
+
+			// Add debug info to processed content if available
+			if debugEnabled && debugInfo != nil {
+				// If the result is a map, add debug info directly
+				if contentMap, ok := processedContent.(map[string]interface{}); ok {
+					contentMap["debug"] = debugInfo
+					processedContent = contentMap
+				} else {
+					// For struct responses, we'll handle debug in a different way below
+				}
 			}
 
 			// Update the content with the processed result
@@ -703,6 +741,11 @@ func (p *BaseProcessor) Process(ctx context.Context, item *data.ProcessItem) (*d
 							}
 						}
 
+						// Add debug info to the struct map if enabled
+						if debugEnabled && debugInfo != nil {
+							structMap["debug"] = debugInfo
+						}
+
 						// If the struct has a processor_type, use it
 						if hasProcessorType && processorTypeValue != "" {
 							result.AddProcessingInfo(p.name, structMap)
@@ -718,9 +761,16 @@ func (p *BaseProcessor) Process(ctx context.Context, item *data.ProcessItem) (*d
 				}
 
 				// If not a struct or conversion failed, use the default processor_type
-				result.AddProcessingInfo(p.name, map[string]interface{}{
+				processingInfo := map[string]interface{}{
 					"processor_type": p.name,
-				})
+				}
+
+				// Add debug info if enabled
+				if debugEnabled && debugInfo != nil {
+					processingInfo["debug"] = debugInfo
+				}
+
+				result.AddProcessingInfo(p.name, processingInfo)
 			}
 		} else {
 			// Default behavior: replace content with LLM response
@@ -734,9 +784,16 @@ func (p *BaseProcessor) Process(ctx context.Context, item *data.ProcessItem) (*d
 			}
 
 			// Add processing info with the proper processor type for non-LLM processing
-			result.AddProcessingInfo(p.name, map[string]interface{}{
+			processingInfo := map[string]interface{}{
 				"processor_type": p.name,
-			})
+			}
+
+			// Add debug info if enabled
+			if debugEnabled && debugInfo != nil {
+				processingInfo["debug"] = debugInfo
+			}
+
+			result.AddProcessingInfo(p.name, processingInfo)
 		}
 	} else {
 		// Add processing info with the proper processor type for non-LLM processing

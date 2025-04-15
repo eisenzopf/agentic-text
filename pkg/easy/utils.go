@@ -115,6 +115,54 @@ func ProcessBatchText(texts []string, processorType string, concurrency int) ([]
 	return cleanedResults, nil
 }
 
+// ProcessTextWithOptions processes text with a specified processor type and options
+func ProcessTextWithOptions(text, processorType string, options map[string]interface{}) (map[string]interface{}, error) {
+	// Create a config with the options, but keep the default provider settings
+	config := &Config{
+		Provider:    DefaultConfig.Provider,
+		Model:       DefaultConfig.Model,
+		MaxTokens:   DefaultConfig.MaxTokens,
+		Temperature: DefaultConfig.Temperature,
+		Options:     options,
+	}
+
+	return ProcessTextWithConfig(text, processorType, config)
+}
+
+// ProcessBatchTextWithOptions processes a batch of texts with processor type and options
+func ProcessBatchTextWithOptions(texts []string, processorType string, concurrency int, options map[string]interface{}) ([]map[string]interface{}, error) {
+	if concurrency <= 0 {
+		concurrency = 2
+	}
+
+	// Create a wrapper with options, but keep the default provider settings
+	config := &Config{
+		Provider:    DefaultConfig.Provider,
+		Model:       DefaultConfig.Model,
+		MaxTokens:   DefaultConfig.MaxTokens,
+		Temperature: DefaultConfig.Temperature,
+		Options:     options,
+	}
+
+	wrapper, err := NewWithConfig(processorType, config)
+	if err != nil {
+		return nil, err
+	}
+
+	results, err := wrapper.ProcessBatch(texts, concurrency)
+	if err != nil {
+		return nil, err
+	}
+
+	// Clean the responses to handle JSON inside response fields
+	cleanedResults := make([]map[string]interface{}, len(results))
+	for i, result := range results {
+		cleanedResults[i] = CleanLLMResponse(result)
+	}
+
+	return cleanedResults, nil
+}
+
 // ProcessJSON takes a JSON string, processes it with the specified processor, and returns a result
 func ProcessJSON(jsonStr, processorType string) (map[string]interface{}, error) {
 	// Parse JSON

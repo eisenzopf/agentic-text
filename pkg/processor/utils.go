@@ -2,6 +2,7 @@ package processor
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -310,4 +311,36 @@ func parseFloat(s string) (float64, error) {
 
 func parseBool(s string) (bool, error) {
 	return strconv.ParseBool(s)
+}
+
+// DebugLLMInteraction prints detailed debug information about an LLM interaction
+// This can be called by any processor when debug is enabled
+func DebugLLMInteraction(prompt string, response interface{}) {
+	fmt.Println("DEBUG - LLM Prompt:")
+	fmt.Println("====================================")
+	fmt.Println(prompt)
+	fmt.Println("====================================")
+
+	fmt.Printf("DEBUG - Raw LLM Response: %+v\n", response)
+
+	// If response is a string containing a code block, try to clean and print it
+	if strResponse, ok := response.(string); ok {
+		if strings.HasPrefix(strResponse, "```") {
+			fmt.Println("DEBUG - Detected markdown code block, cleaning...")
+			// Remove markdown formatting
+			strResponse = strings.TrimPrefix(strResponse, "```json")
+			strResponse = strings.TrimPrefix(strResponse, "```")
+			endIndex := strings.LastIndex(strResponse, "```")
+			if endIndex != -1 {
+				strResponse = strResponse[:endIndex]
+			}
+			strResponse = strings.TrimSpace(strResponse)
+
+			// Try to parse and print the cleaned JSON
+			var jsonData map[string]interface{}
+			if err := json.Unmarshal([]byte(strResponse), &jsonData); err == nil {
+				fmt.Printf("DEBUG - Cleaned JSON: %+v\n", jsonData)
+			}
+		}
+	}
 }

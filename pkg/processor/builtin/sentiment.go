@@ -21,16 +21,6 @@ type SentimentResult struct {
 	ProcessorType string `json:"processor_type"`
 }
 
-// DefaultValues returns the default values for this result type
-func (r *SentimentResult) DefaultValues() map[string]interface{} {
-	return map[string]interface{}{
-		"sentiment":  "unknown",
-		"score":      0.0,
-		"confidence": 0.0,
-		"keywords":   []string{},
-	}
-}
-
 // SentimentPrompt is a prompt generator for sentiment analysis
 type SentimentPrompt struct{}
 

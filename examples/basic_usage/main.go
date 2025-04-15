@@ -34,7 +34,7 @@ func main() {
 	processorType := flag.String("processor", "sentiment", "The type of processor to use (sentiment, etc.)")
 	batchMode := flag.Bool("batch", false, "Process multiple text inputs as a batch")
 	configPath := flag.String("config", "config.json", "Path to the configuration file")
-	verbose := flag.Bool("verbose", false, "Show LLM input and output for debugging")
+	verbose := flag.Bool("verbose", false, "Enable debugging to show LLM requests and responses")
 
 	// Config overrides
 	providerFlag := flag.String("provider", "", "Override the LLM provider in config.json")
@@ -102,6 +102,7 @@ func main() {
 	providerOptions := map[string]interface{}{}
 	if *verbose {
 		providerOptions["debug"] = true
+		fmt.Println("Debug mode: enabled - LLM requests and responses will be shown")
 	}
 
 	// Update provider config with options
