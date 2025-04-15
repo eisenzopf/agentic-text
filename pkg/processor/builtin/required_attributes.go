@@ -12,10 +12,10 @@ import (
 
 // AttributeDefinition represents a data attribute definition
 type AttributeDefinition struct {
-	FieldName   string `json:"field_name"`  // Database field name in snake_case
-	Title       string `json:"title"`       // Human readable title
-	Description string `json:"description"` // Detailed description of the attribute
-	Rationale   string `json:"rationale"`   // Why this attribute is needed
+	FieldName   string `json:"field_name" default:"unknown"`                                                    // Database field name in snake_case
+	Title       string `json:"title" default:"Unknown"`                                                         // Human readable title
+	Description string `json:"description" default:"Unable to determine required attributes from the response"` // Detailed description of the attribute
+	Rationale   string `json:"rationale" default:"The response did not contain valid attribute definitions"`    // Why this attribute is needed
 }
 
 // RequiredAttributesResult contains the required attributes results
@@ -26,21 +26,10 @@ type RequiredAttributesResult struct {
 	ProcessorType string `json:"processor_type"`
 }
 
-// defaultRequiredAttributes defines the default attributes used when no valid attributes are found
-var defaultRequiredAttributes = []AttributeDefinition{
-	{
-		FieldName:   "unknown",
-		Title:       "Unknown",
-		Description: "Unable to determine required attributes from the response",
-		Rationale:   "The response did not contain valid attribute definitions",
-	},
-}
-
 // DefaultValues returns the default values for this result type
 func (r *RequiredAttributesResult) DefaultValues() map[string]interface{} {
-	return map[string]interface{}{
-		"attributes": defaultRequiredAttributes,
-	}
+	// Use the new helper function to get defaults directly from struct tags
+	return processor.DefaultsFromStruct(r)
 }
 
 // RequiredAttributesPrompt is a prompt generator for required attributes
@@ -223,8 +212,7 @@ func init() {
 		&RequiredAttributesPrompt{}, // promptGenerator
 		nil,                         // no custom initialization needed
 		map[string]interface{}{ // validation options
-			"field_name":    "attributes",
-			"default_value": defaultRequiredAttributes,
+			"field_name": "attributes",
 		},
 	)
 

@@ -21,11 +21,7 @@ type IntentResult struct {
 
 // DefaultValues returns the default values for this result type
 func (r *IntentResult) DefaultValues() map[string]interface{} {
-	return map[string]interface{}{
-		"label_name":  "Unclear Intent",
-		"label":       "unclear_intent",
-		"description": "The conversation transcript is unclear or does not contain a discernible customer service request.",
-	}
+	return processor.DefaultsFromStruct(r)
 }
 
 // IntentPrompt is a prompt generator for intent analysis
