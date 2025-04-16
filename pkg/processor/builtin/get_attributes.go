@@ -102,9 +102,6 @@ func init() {
 		&AttributeResult{},       // resultStruct
 		&AttributePrompt{},       // promptGenerator
 		nil,                      // no custom initialization needed
-		map[string]interface{}{ // validation options
-			"field_name":    "attributes",
-			"default_value": []Attribute{},
-		},
+		false,                    // No struct validation needed by default
 	)
 }

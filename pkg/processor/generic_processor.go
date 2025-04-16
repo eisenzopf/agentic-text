@@ -38,7 +38,7 @@ func RegisterGenericProcessor(
 	resultStruct interface{},
 	promptGenerator PromptGenerator,
 	customInit func(*GenericProcessor) error,
-	validationOptions ...map[string]interface{},
+	validateStructure bool,
 ) {
 	// Register the processor creator function
 	Register(name, func(provider llm.Provider, options Options) (Processor, error) {
@@ -56,6 +56,7 @@ func RegisterGenericProcessor(
 			ResultStruct:      resultStruct,
 			Fields:            make(map[string]FieldMapper),
 			DynamicValidators: make(map[string]func(interface{}) interface{}),
+			validateStructure: validateStructure,
 		}
 
 		// Set the default responder
@@ -69,47 +70,23 @@ func RegisterGenericProcessor(
 		// Apply processor-specific defaults
 		responseHandler.applyProcessorDefaults()
 
-		// Apply validation options if provided
-		if len(validationOptions) > 0 && validationOptions[0] != nil {
-			// Get the struct value
-			structVal := reflect.ValueOf(resultStruct).Elem()
+		// Check for custom field validators (ValidateFieldName methods)
+		// These run *after* the main structure validation (if enabled and passed)
+		// Iterate over fields defined in the handler (which come from ResultStruct)
+		for fieldName := range responseHandler.Fields {
+			// Build the expected custom validator method name: "Validate" + Title case field name
+			methodName := "Validate" + strings.Title(fieldName)
+			validatorMethod := reflect.ValueOf(resultStruct).MethodByName(methodName)
 
-			// Check if the struct has Validate methods for fields that need validation
-			if fieldName, ok := validationOptions[0]["field_name"].(string); ok {
-				// Build the validator method name: "Validate" + Title case field name
-				methodName := "Validate" + strings.Title(fieldName)
-				validatorMethod := reflect.ValueOf(resultStruct).MethodByName(methodName)
-
-				// If there's no existing validator method but we want validation
-				if !validatorMethod.IsValid() {
-					// Get default value from options or create a default
-					var defaultValue interface{}
-					if val, ok := validationOptions[0]["default_value"]; ok {
-						defaultValue = val
-					} else {
-						// Create a default value based on field type
-						// Look for the field in the struct
-						for i := 0; i < structVal.Type().NumField(); i++ {
-							field := structVal.Type().Field(i)
-
-							// Get JSON tag name
-							tag := field.Tag.Get("json")
-							if tag == "" {
-								tag = strings.ToLower(field.Name)
-							} else {
-								tag = strings.Split(tag, ",")[0]
-							}
-
-							if tag == fieldName {
-								// Create a default value of the appropriate type
-								defaultValue = reflect.New(field.Type).Elem().Interface()
-								break
-							}
-						}
+			// If a custom validator method exists, add it to DynamicValidators
+			if validatorMethod.IsValid() {
+				// Call the validator method to get transform function
+				results := validatorMethod.Call(nil)
+				if len(results) > 0 {
+					if transformFn, ok := results[0].Interface().(func(interface{}) interface{}); ok {
+						// Add custom validator/transformer to DynamicValidators
+						responseHandler.DynamicValidators[fieldName] = transformFn
 					}
-
-					// Add validate method to dynamic validators
-					responseHandler.DynamicValidators[fieldName] = ValidateData(fieldName, defaultValue)
 				}
 			}
 		}

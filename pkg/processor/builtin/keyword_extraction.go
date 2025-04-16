@@ -7,6 +7,16 @@ import (
 	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
 
+// Keyword represents a single extracted keyword
+type Keyword struct {
+	// Term is the extracted keyword term
+	Term string `json:"term"`
+	// Relevance is the relevance score from 0.0 to 1.0
+	Relevance float64 `json:"relevance"`
+	// Category is the category of the keyword (e.g., "topic", "person", "location")
+	Category string `json:"category"`
+}
+
 // KeywordResult contains the keyword extraction results
 type KeywordResult struct {
 	// Keywords is an array of extracted keywords
@@ -20,16 +30,6 @@ func (r *KeywordResult) DefaultValues() map[string]interface{} {
 	return map[string]interface{}{
 		"keywords": []Keyword{},
 	}
-}
-
-// Keyword represents a single extracted keyword
-type Keyword struct {
-	// Term is the extracted keyword term
-	Term string `json:"term"`
-	// Relevance is the relevance score from 0.0 to 1.0
-	Relevance float64 `json:"relevance"`
-	// Category is the category of the keyword (e.g., "topic", "person", "location")
-	Category string `json:"category"`
 }
 
 // KeywordPrompt is a prompt generator for keyword extraction
@@ -71,9 +71,6 @@ func init() {
 		&KeywordResult{},     // resultStruct
 		&KeywordPrompt{},     // promptGenerator
 		nil,                  // no custom initialization needed
-		map[string]interface{}{ // validation options
-			"field_name":    "keywords",
-			"default_value": []Keyword{},
-		},
+		true,                 // Enable struct-level validation
 	)
 }

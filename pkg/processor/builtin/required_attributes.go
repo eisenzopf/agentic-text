@@ -63,5 +63,6 @@ func init() {
 		&RequiredAttributesResult{}, // resultStruct
 		&RequiredAttributesPrompt{}, // promptGenerator
 		nil,                         // no custom initialization needed
+		false,                       // No struct validation needed by default
 	)
 }

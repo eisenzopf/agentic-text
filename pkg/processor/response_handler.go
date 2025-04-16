@@ -27,6 +27,8 @@ type BaseResponseHandler struct {
 	ResultStruct interface{}
 	// DynamicValidators stores dynamically added validation functions
 	DynamicValidators map[string]func(interface{}) interface{}
+	// validateStructure determines if strict structural validation should be performed
+	validateStructure bool
 }
 
 // CleanResponseString removes markdown code blocks from a response string
@@ -495,65 +497,48 @@ func (h *BaseResponseHandler) AutoProcessResponse(ctx context.Context, text stri
 
 	// If we don't have valid JSON structure, return the default response
 	if !validJSON {
-		return data, nil
+		return data, nil // data here contains the non-JSON response and defaults
 	}
 
-	// Map fields from data to result struct using reflection
-	result := h.MapToStruct(data)
+	// --- Structural Validation Step ---
+	if h.validateStructure {
+		// Attempt to map the data to the struct to check structural compatibility.
+		// MapToStruct internally uses MapResponseToResult which applies defaults and validators.
+		tentativeResult := h.MapToStruct(data)
 
-	// Add debug info if needed
-	if debugInfo != nil {
-		// If the result is already a map, just add debug info
-		if resultMap, ok := result.(map[string]interface{}); ok {
-			resultMap["debug"] = debugInfo
-			return resultMap, nil
-		}
-
-		// Otherwise, convert the struct to a map to include debug info
-		resultMap := map[string]interface{}{
-			"processor_type": h.ProcessorType,
-			"debug":          debugInfo,
-		}
-
-		// Use reflection to copy fields from the struct to the map
-		resultValue := reflect.ValueOf(result).Elem()
-		resultType := resultValue.Type()
-
-		for i := 0; i < resultType.NumField(); i++ {
-			field := resultType.Field(i)
-			fieldValue := resultValue.Field(i)
-
-			// Get the JSON tag name
-			tag := field.Tag.Get("json")
-			if tag == "" {
-				// No JSON tag, use field name in lowercase
-				tag = strings.ToLower(field.Name)
-			} else {
-				// Extract the name part of the tag (before any comma)
-				tag = strings.Split(tag, ",")[0]
+		// Simple check: If mapping resulted in nil or didn't produce the expected type,
+		// consider it a structural validation failure.
+		// More sophisticated checks could be added here (e.g., check required fields).
+		if tentativeResult == nil || reflect.TypeOf(tentativeResult) != reflect.TypeOf(h.ResultStruct) {
+			// Validation failed, return the default response object.
+			// We need to ensure the default response includes the processor_type.
+			defaultResponseMap := h.createDefaultResponse()
+			// Add debug info to the default response if available
+			if debugInfo != nil {
+				defaultResponseMap["debug"] = debugInfo
 			}
-
-			// Skip omitempty fields that are empty
-			if strings.Contains(field.Tag.Get("json"), "omitempty") {
-				// Skip empty slices
-				if fieldValue.Kind() == reflect.Slice && fieldValue.Len() == 0 {
-					continue
-				}
-
-				// Skip empty strings
-				if fieldValue.Kind() == reflect.String && fieldValue.String() == "" {
-					continue
-				}
-			}
-
-			// Add field to map
-			resultMap[tag] = fieldValue.Interface()
+			return defaultResponseMap, nil
 		}
+		// If validation passes, we can proceed with the result from the tentative mapping.
+		result := tentativeResult
 
-		return resultMap, nil
+		// Add debug info if needed (handling map vs struct)
+		if debugInfo != nil {
+			AddDebugInfoToResult(&result, debugInfo, h.ProcessorType)
+		}
+		return result, nil
+
+	} else {
+		// --- No Structural Validation ---
+		// Proceed with mapping without the strict structural check
+		result := h.MapToStruct(data)
+
+		// Add debug info if needed (handling map vs struct)
+		if debugInfo != nil {
+			AddDebugInfoToResult(&result, debugInfo, h.ProcessorType)
+		}
+		return result, nil
 	}
-
-	return result, nil
 }
 
 // HandleResponse implements ResponseHandler interface

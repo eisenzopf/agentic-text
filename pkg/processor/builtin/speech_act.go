@@ -61,5 +61,6 @@ func init() {
 		&ExampleResult{}, // resultStruct - default values come from struct tags
 		&ExamplePrompt{}, // promptGenerator
 		nil,              // no custom initialization needed
+		false,            // No struct validation needed by default
 	)
 }

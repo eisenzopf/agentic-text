@@ -59,5 +59,6 @@ func init() {
 		&SentimentResult{}, // resultStruct
 		&SentimentPrompt{}, // promptGenerator
 		nil,                // no custom initialization needed
+		false,              // No struct validation needed by default
 	)
 }

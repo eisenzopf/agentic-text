@@ -7,39 +7,39 @@ import (
 )
 
 // ValidateData is a generic validation function that ensures data returned from LLM responses
-// is properly structured before being used in the application
-func ValidateData(fieldName string, defaultValue interface{}) func(interface{}) interface{} {
+// is properly structured before being used in the application.
+// It returns nil if the validation fails.
+func ValidateData(fieldName string) func(interface{}) interface{} {
 	return func(val interface{}) interface{} {
 		// Handle different ways the LLM might return data
 		switch v := val.(type) {
 		case []interface{}:
 			// If the value is a slice (likely []interface{} from JSON unmarshalling):
 			// Check if the slice is non-empty. If it is, return it as is.
-			// If it's empty or nil, return the default value for the field.
-			// We assume that if the LLM returned a non-empty list for this field,
-			// it's structurally valid at this generic validation stage.
-			// More specific validation (like checking fields within list items)
-			// would require custom ValidateFieldName methods or a different approach.
+			// If it's empty or nil, validation fails, return nil.
 			if len(v) == 0 {
-				return defaultValue
+				return nil // Validation fails for empty slice
 			}
 			return v // Return the original non-empty slice
 
 		case map[string]interface{}:
-			// Check if data is in a nested field
+			// Check if data is in a nested field (e.g., {"keywords": [...]})
 			if nestedData, ok := v[fieldName].([]interface{}); ok {
-				return ValidateData(fieldName, defaultValue)(nestedData)
+				// Recursively validate the nested slice
+				return ValidateData(fieldName)(nestedData)
 			}
 
-			// If field name exists directly in the map
+			// Check if the fieldName exists directly as a key in the map
+			// and has a non-empty string representation (basic check)
 			if GetStringValue(v, fieldName) != "" {
-				return v
+				return v // Return the map if the field seems present
 			}
 
-			return defaultValue
+			return nil // Validation fails if field not found or empty
 
 		default:
-			return defaultValue
+			// If the type is unexpected, validation fails
+			return nil
 		}
 	}
 }

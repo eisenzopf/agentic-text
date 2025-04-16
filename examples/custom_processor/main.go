@@ -68,6 +68,7 @@ func main() {
 		&KeywordResult{}, // resultStruct
 		&KeywordPrompt{}, // promptGenerator
 		nil,              // no custom initialization needed
+		false,            // No struct validation needed by default
 	)
 
 	// Input text

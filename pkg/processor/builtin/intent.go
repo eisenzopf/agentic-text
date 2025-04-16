@@ -62,5 +62,6 @@ func init() {
 		&IntentResult{},          // resultStruct
 		&IntentPrompt{},          // promptGenerator
 		nil,                      // no custom initialization needed
+		false,                    // No struct validation needed by default
 	)
 }
