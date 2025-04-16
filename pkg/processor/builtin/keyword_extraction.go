@@ -25,13 +25,6 @@ type KeywordResult struct {
 	ProcessorType string `json:"processor_type"`
 }
 
-// DefaultValues returns the default values for this result type
-func (r *KeywordResult) DefaultValues() map[string]interface{} {
-	return map[string]interface{}{
-		"keywords": []Keyword{},
-	}
-}
-
 // KeywordPrompt is a prompt generator for keyword extraction
 type KeywordPrompt struct{}
 
