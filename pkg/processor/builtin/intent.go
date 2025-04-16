@@ -19,11 +19,6 @@ type IntentResult struct {
 	ProcessorType string `json:"processor_type"`
 }
 
-// DefaultValues returns the default values for this result type
-func (r *IntentResult) DefaultValues() map[string]interface{} {
-	return processor.DefaultsFromStruct(r)
-}
-
 // IntentPrompt is a prompt generator for intent analysis
 type IntentPrompt struct{}
 
