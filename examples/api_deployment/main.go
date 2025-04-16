@@ -10,6 +10,9 @@ import (
 	"github.com/eisenzopf/agentic-text/pkg/data"
 	"github.com/eisenzopf/agentic-text/pkg/llm"
 	"github.com/eisenzopf/agentic-text/pkg/processor"
+
+	// Import the builtin package for registration
+	_ "github.com/eisenzopf/agentic-text/pkg/processor/builtin"
 )
 
 // Server holds the API server configuration
@@ -124,7 +127,7 @@ func respondWithError(w http.ResponseWriter, message string, status int) {
 
 func main() {
 	// Get API key from environment
-	apiKey := os.Getenv("LLM_API_KEY")
+	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		apiKey = "your-api-key" // For demo purposes only
 		fmt.Println("Warning: Using demo API key. Set LLM_API_KEY environment variable for production.")
@@ -133,7 +136,7 @@ func main() {
 	// Initialize LLM provider
 	config := llm.Config{
 		APIKey:      apiKey,
-		Model:       "gemini-pro",
+		Model:       "gemini-2.0-flash",
 		MaxTokens:   1024,
 		Temperature: 0.2,
 	}
