@@ -13,26 +13,17 @@ func ValidateData(fieldName string, defaultValue interface{}) func(interface{}) 
 		// Handle different ways the LLM might return data
 		switch v := val.(type) {
 		case []interface{}:
-			// Direct array format
+			// If the value is a slice (likely []interface{} from JSON unmarshalling):
+			// Check if the slice is non-empty. If it is, return it as is.
+			// If it's empty or nil, return the default value for the field.
+			// We assume that if the LLM returned a non-empty list for this field,
+			// it's structurally valid at this generic validation stage.
+			// More specific validation (like checking fields within list items)
+			// would require custom ValidateFieldName methods or a different approach.
 			if len(v) == 0 {
 				return defaultValue
 			}
-
-			// Validate items in the array if they're maps
-			validItems := make([]interface{}, 0, len(v))
-			for _, item := range v {
-				if itemMap, ok := item.(map[string]interface{}); ok {
-					// Ensure required field exists
-					if GetStringValue(itemMap, fieldName) != "" {
-						validItems = append(validItems, itemMap)
-					}
-				}
-			}
-
-			if len(validItems) == 0 {
-				return defaultValue
-			}
-			return validItems
+			return v // Return the original non-empty slice
 
 		case map[string]interface{}:
 			// Check if data is in a nested field

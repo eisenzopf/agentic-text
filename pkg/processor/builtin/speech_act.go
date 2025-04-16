@@ -30,32 +30,33 @@ type ExamplePrompt struct{}
 
 // GeneratePrompt implements PromptGenerator interface
 func (p *ExamplePrompt) GeneratePrompt(ctx context.Context, text string) (string, error) {
+	// Generate example JSON from the result struct
+	exampleResult := &ExampleResult{}
+	jsonExample := processor.GenerateJSONExample(exampleResult)
+
 	return fmt.Sprintf(`**Role:** You are an expert at categorizing text.
 
-**Objective:** Analyze the provided text and categorize it.
+**Objective:** Analyze the provided text and categorize it according to the structure below.
 
 **Input Text:**
 %s
 
 **Instructions:**
 1. Determine the category of the text (informational, question, request, etc.)
-2. Rate the complexity of the text on a scale from 1-10
+2. Rate the complexity of the text on a scale from 1.0-10.0
 3. Extract up to 5 keywords from the text
-4. Format your response as a valid JSON object
+4. Format your response as a valid JSON object matching the structure provided.
+5. *** IMPORTANT: Your ENTIRE response must be a single JSON object, without ANY additional text, explanation, or markdown formatting. ***
 
 **Required JSON Output Structure:**
-{
-  "category": "...",
-  "complexity": ...,
-  "keywords": ["...", "..."]
-}`, text), nil
+%s`, text, jsonExample), nil
 }
 
 // Register the processor with the registry
 func init() {
 	// Register the example processor using the generic processor registration
 	processor.RegisterGenericProcessor(
-		"example",        // name
+		"speech_act",     // name
 		[]string{"text"}, // contentTypes
 		&ExampleResult{}, // resultStruct - default values come from struct tags
 		&ExamplePrompt{}, // promptGenerator

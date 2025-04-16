@@ -64,6 +64,10 @@ type AttributePrompt struct{}
 
 // GeneratePrompt implements PromptGenerator interface
 func (p *AttributePrompt) GeneratePrompt(ctx context.Context, text string) (string, error) {
+	// Generate example JSON from the result struct
+	exampleResult := &AttributeResult{}
+	jsonExample := processor.GenerateJSONExample(exampleResult)
+
 	return fmt.Sprintf(`**Role:** You are an expert at extracting structured information from text.
 
 **Objective:** Analyze the provided text and extract relevant attributes and their values.
@@ -74,7 +78,7 @@ func (p *AttributePrompt) GeneratePrompt(ctx context.Context, text string) (stri
 **Instructions:**
 1. Carefully read and interpret the Input Text.
 2. If the input appears to be JSON containing required attributes, use those as a guide to extract values.
-3. Extract any relevant attributes and their values.
+3. Extract any relevant attributes and their values based on the required structure below.
 4. For each attribute, provide:
    - A field name (in snake_case)
    - The extracted value
@@ -86,17 +90,7 @@ func (p *AttributePrompt) GeneratePrompt(ctx context.Context, text string) (stri
 8. *** IMPORTANT: Your ENTIRE response must be a single JSON object, without ANY additional text, explanation, or markdown formatting. ***
 
 **Required JSON Output Structure:**
-{
-  "attributes": [
-    {
-      "field_name": "attribute_name",
-      "value": "extracted_value",
-      "confidence": 0.0,
-      "explanation": "..."
-    },
-    ...
-  ]
-}`, text), nil
+%s`, text, jsonExample), nil
 }
 
 // Register the processor with the registry

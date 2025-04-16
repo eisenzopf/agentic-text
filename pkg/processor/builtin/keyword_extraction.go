@@ -37,6 +37,10 @@ type KeywordPrompt struct{}
 
 // GeneratePrompt implements PromptGenerator interface
 func (p *KeywordPrompt) GeneratePrompt(ctx context.Context, text string) (string, error) {
+	// Generate example JSON from the result struct
+	exampleResult := &KeywordResult{}
+	jsonExample := processor.GenerateJSONExample(exampleResult)
+
 	return fmt.Sprintf(`**Role:** You are an expert at extracting important keywords from text.
 
 **Objective:** Analyze the provided text and extract the most meaningful keywords.
@@ -46,7 +50,7 @@ func (p *KeywordPrompt) GeneratePrompt(ctx context.Context, text string) (string
 
 **Instructions:**
 1. Carefully read and interpret the Input Text.
-2. Extract the most important keywords or key phrases that represent the main topics.
+2. Extract the most important keywords or key phrases that represent the main topics, following the structure below.
 3. For each keyword, provide:
    - The keyword term
    - A relevance score (0.0 to 1.0) indicating how central the keyword is to the content
@@ -55,16 +59,7 @@ func (p *KeywordPrompt) GeneratePrompt(ctx context.Context, text string) (string
 5. *** IMPORTANT: Your ENTIRE response must be a single JSON object, without ANY additional text, explanation, or markdown formatting. ***
 
 **Required JSON Output Structure:**
-{
-  "keywords": [
-    {
-      "term": "example keyword",
-      "relevance": 0.8,
-      "category": "topic"
-    },
-    ...
-  ]
-}`, text), nil
+%s`, text, jsonExample), nil
 }
 
 // Register the processor with the registry

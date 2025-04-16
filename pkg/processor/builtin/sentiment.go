@@ -26,6 +26,10 @@ type SentimentPrompt struct{}
 
 // GeneratePrompt implements PromptGenerator interface
 func (p *SentimentPrompt) GeneratePrompt(ctx context.Context, text string) (string, error) {
+	// Generate example JSON from the result struct
+	exampleResult := &SentimentResult{}
+	jsonExample := processor.GenerateJSONExample(exampleResult)
+
 	return fmt.Sprintf(`**Role:** You are an expert sentiment analysis tool that ONLY outputs valid JSON.
 
 **Objective:** Analyze the sentiment expressed in the provided text accurately and objectively. Consider the overall tone, specific word choices, context, and potential nuances like sarcasm or mixed feelings.
@@ -43,12 +47,7 @@ func (p *SentimentPrompt) GeneratePrompt(ctx context.Context, text string) (stri
 7.  *** IMPORTANT: Your ENTIRE response must be a single JSON object, without ANY additional text, explanation, or markdown formatting. ***
 
 **Required JSON Output Structure:**
-{
-  "sentiment": "...", // "positive", "negative", or "neutral"
-  "score": ...,     // Float between -1.0 and 1.0
-  "confidence": ..., // Float between 0.0 and 1.0
-  "keywords": ["...", "..."] // Array of up to 5 strings
-}`, text), nil
+%s`, text, jsonExample), nil
 }
 
 // Register the processor with the registry

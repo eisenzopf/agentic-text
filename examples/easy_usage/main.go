@@ -26,6 +26,7 @@ func main() {
 
 	// Extract flags and collect non-flag arguments
 	var inputs []string
+	processorTypeSet := false // Track if processor type has been set
 	for i := 0; i < len(args); i++ {
 		if args[i] == "-h" || args[i] == "--help" {
 			printUsage()
@@ -36,11 +37,11 @@ func main() {
 			fmt.Printf("Unknown flag: %s\n", args[i])
 			printUsage()
 			return
-		} else if i == 0 {
-			// First non-flag argument is the processor type
+		} else if !processorTypeSet { // Found the first non-flag argument
 			processorType = args[i]
+			processorTypeSet = true
 		} else {
-			// All other non-flag arguments are inputs
+			// All subsequent non-flag arguments are inputs
 			inputs = append(inputs, args[i])
 		}
 	}
