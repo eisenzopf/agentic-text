@@ -466,6 +466,11 @@ func (h *BaseResponseHandler) mapSlice(value interface{}, field reflect.Value) {
 								continue
 							}
 
+							// If basic mapping failed and the target is a slice, try mapSlice
+							if fieldValue.Kind() == reflect.Slice {
+								h.mapSlice(mapValue, fieldValue)
+							}
+
 							// For complex types, might need additional handling here
 						}
 					}
