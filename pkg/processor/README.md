@@ -25,40 +25,58 @@ package myprocessors
 
 import (
 	"context"
+	"fmt"
 	
 	"github.com/eisenzopf/agentic-text/pkg/processor"
-	"github.com/eisenzopf/agentic-text/pkg/llm"
 )
 
-// SentimentResult defines the structure of sentiment analysis results
+// SentimentResult contains the sentiment analysis results
 type SentimentResult struct {
-	ProcessorType string  `json:"processor_type"`
-	Sentiment     string  `json:"sentiment"`
-	Score         float64 `json:"score"`
+	// Sentiment is the overall sentiment (positive, negative, neutral)
+	Sentiment string `json:"sentiment" default:"unknown"`
+	// Score is the sentiment score (-1.0 to 1.0)
+	Score float64 `json:"score" default:"0.0"`
+	// ProcessorType is the type of processor that generated this result
+	ProcessorType string `json:"processor_type"`
 }
 
-// SentimentPromptGenerator generates prompts for sentiment analysis
-type SentimentPromptGenerator struct{}
+// SentimentPrompt is a prompt generator for sentiment analysis
+type SentimentPrompt struct{}
 
-func (g *SentimentPromptGenerator) GeneratePrompt(ctx context.Context, text string) (string, error) {
-	return `Analyze the sentiment of the following text. 
-	Return a JSON object with "sentiment" (either "positive", "negative", or "neutral") 
-	and "score" (a value between -1.0 and 1.0, where -1.0 is very negative and 1.0 is very positive):
-	
-	TEXT: ` + text, nil
+// GeneratePrompt implements PromptGenerator interface
+func (p *SentimentPrompt) GeneratePrompt(ctx context.Context, text string) (string, error) {
+	// Generate example JSON from the result struct
+	exampleResult := &SentimentResult{}
+	jsonExample := processor.GenerateJSONExample(exampleResult)
+
+	return fmt.Sprintf(`**Role:** You are an expert sentiment analysis tool that ONLY outputs valid JSON.
+
+**Objective:** Analyze the sentiment expressed in the provided text.
+
+**Input Text:**
+%s
+
+**Instructions:**
+1. Determine the primary sentiment: "positive", "negative", or "neutral".
+2. Assign a precise sentiment score between -1.0 (most negative) and 1.0 (most positive).
+3. Format your entire output as a single, valid JSON object.
+4. *** IMPORTANT: Your ENTIRE response must be a single JSON object. ***
+
+**Required JSON Output Structure:**
+%s`, text, jsonExample), nil
 }
 
 func init() {
-	// Register the sentiment processor
+	// Register the sentiment processor using the generic processor registration
 	processor.RegisterGenericProcessor(
-		"sentiment",
-		[]string{"text"},
-		&SentimentResult{},
-		&SentimentPromptGenerator{},
-		nil, // No custom init
+		"sentiment",        // name
+		[]string{"text"},   // contentTypes
+		&SentimentResult{}, // resultStruct
+		&SentimentPrompt{}, // promptGenerator
+		nil,                // no custom initialization needed
+		false,              // No struct validation needed by default
 	)
 }
-```
 
 ## Using Processors
 
@@ -133,51 +151,38 @@ The package supports a generic validation approach that can be used to validate 
 
 ### Using Generic Validation
 
-When registering a new processor, you can specify validation options to automatically validate specific fields:
+When registering a new processor, you can specify whether to enable struct-level validation:
 
 ```go
-// Register a processor with validation for the "attributes" field
+// Register a processor with validation enabled
 processor.RegisterGenericProcessor(
     "my_processor",         // name
     []string{"text", "json"}, // contentTypes
     &MyResultStruct{},       // resultStruct
     &MyPromptGenerator{},    // promptGenerator
     nil,                     // no custom initialization needed
-    map[string]interface{}{  // validation options
-        "field_name": "attributes",
-        "default_value": []MyAttribute{
-            {
-                ID: "default",
-                Value: "Default value used when validation fails",
-            },
-        },
-    },
+    true,                    // Enable struct-level validation
 )
 ```
-
-### Validation Options
-
-The validation options map supports the following keys:
-
-- `field_name`: The name of the field to validate (required)
-- `default_value`: The default value to return if validation fails (optional)
 
 ### How It Works
 
 The validation system will:
 
-1. Check if the field exists in the LLM response
-2. Validate that the field has the expected structure
-3. If validation fails, return the default value
-4. Apply the validation before any other transformations
+1. Check if the required fields exist in the LLM response
+2. Validate that the fields have the expected structure
+3. Apply validation before any other transformations
 
 ### Custom Validation
 
-You can still implement custom validation by adding a method to your result struct with the format:
+You can implement custom validation by adding a method to your result struct with the format:
 
 ```go
 func (r *MyResultStruct) ValidateFieldName() func(interface{}) interface{} {
-    // Custom validation logic
+    return func(val interface{}) interface{} {
+        // Custom validation logic
+        // Return the validated value
+    }
 }
 ```
 

@@ -174,6 +174,8 @@ Built-in processors include:
 - `intent`: Identifies the user's intent from the text
 - `required_attributes`: Identifies required attributes mentioned in the text
 - `get_attributes`: Extracts structured attributes from the text
+- `keyword_extraction`: Extracts important keywords from text with relevance scores and categories
+- `speech_act`: Identifies distinct speech acts within text (questions, requests, statements, etc.)
 
 ## Advanced Usage
 
@@ -384,6 +386,59 @@ func init() {
 }
 ```
 
+## Pipeline Processing
+
+The `pipeline` package allows you to chain multiple processors together for more complex text analysis workflows:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    
+    "github.com/eisenzopf/agentic-text/pkg/llm"
+    "github.com/eisenzopf/agentic-text/pkg/processor"
+    "github.com/eisenzopf/agentic-text/pkg/pipeline"
+    "github.com/eisenzopf/agentic-text/pkg/data"
+)
+
+func main() {
+    // Initialize an LLM provider
+    provider, _ := llm.NewProvider(llm.Google, llm.Config{
+        APIKey:      "your-api-key",
+        Model:       "gemini-2.0-flash",
+        Temperature: 0.2,
+    })
+    
+    // Create a pipeline with multiple processors
+    chain, err := pipeline.NewChain(
+        []string{"sentiment", "keyword_extraction"},
+        provider,
+        processor.Options{},
+    )
+    if err != nil {
+        fmt.Println("Failed to create pipeline:", err)
+        return
+    }
+    
+    // Process a text item through the pipeline
+    item := data.NewTextProcessItem("input-1", "I really enjoyed this product!", nil)
+    result, err := chain.Process(context.Background(), item)
+    if err != nil {
+        fmt.Println("Pipeline processing failed:", err)
+        return
+    }
+    
+    // Access results from each processor in the chain
+    fmt.Println("Sentiment analysis result:")
+    fmt.Println(result.ProcessingInfo["sentiment"])
+    
+    fmt.Println("Keyword extraction result:")
+    fmt.Println(result.ProcessingInfo["keyword_extraction"])
+}
+```
+
 ## Examples
 
 See the [examples](./examples) directory for more detailed examples:
@@ -396,7 +451,12 @@ See the [examples](./examples) directory for more detailed examples:
 
 ## Documentation
 
-For more details on the `easy` package, see the [pkg/easy/README.md](./pkg/easy/README.md) file.
+For more details on specific packages, see their respective README files:
+- [pkg/easy/README.md](./pkg/easy/README.md): Simplified interface for common operations
+- [pkg/processor/README.md](./pkg/processor/README.md): Core processor framework and interfaces
+- [pkg/llm/README.md](./pkg/llm/README.md): LLM provider abstraction
+- [pkg/data/README.md](./pkg/data/README.md): Data containers and sources
+- [pkg/pipeline/README.md](./pkg/pipeline/README.md): Pipeline processing
 
 ## License
 
