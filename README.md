@@ -13,48 +13,89 @@ A Go library for LLM-powered text processing with pluggable models and data sour
 - **Standardized Data Containers**: Unified ProcessItem structure for different content types
 - **Processing History**: Tracking of processing steps and metadata preservation
 
-## Installation
-
-```bash
-go get github.com/eisenzopf/agentic-text
-```
-
 ## Quick Start
 
 1. Set up your API key environment variable:
    ```bash
    # For Google's Gemini model
    export GEMINI_API_KEY=your_api_key_here
-   
-   # For OpenAI
-   export OPENAI_API_KEY=your_api_key_here
-   
-   # For other supported providers
-   export GROQ_API_KEY=your_api_key_here
-   export AMAZON_API_KEY=your_api_key_here
+  
    ```
 
-2. Use the library in your Go code:
+2. Create a new project:
+   ```bash
+   # Create a project directory
+   mkdir agentic-text-example
+   cd agentic-text-example
+   
+   # Initialize a Go module
+   go mod init agentic-text-test
+   ```
+
+3. Create a main.go file with the following content:
    ```go
    package main
 
    import (
        "fmt"
+       "log"
+
        "github.com/eisenzopf/agentic-text/pkg/easy"
+       // Import the builtin package for processor registration
+       _ "github.com/eisenzopf/agentic-text/pkg/processor/builtin"
    )
 
    func main() {
-       fmt.Println(easy.Sentiment("I absolutely love this product"))
+       // Simple one-line usage
+       result, err := easy.Sentiment("I absolutely love this product")
+       if err != nil {
+           log.Fatalf("Sentiment analysis failed: %v", err)
+       }
+       
+       // Pretty print the result
+       prettyResult, err := easy.PrettyPrint(result)
+       if err != nil {
+           log.Fatalf("Failed to format result: %v", err)
+       }
+       fmt.Printf("Sentiment analysis result:\n%s\n\n", prettyResult)
+       
+       // Try intent detection
+       intentResult, err := easy.Intent("I want to cancel my subscription")
+       if err != nil {
+           log.Fatalf("Intent analysis failed: %v", err)
+       }
+       
+       prettyIntentResult, _ := easy.PrettyPrint(intentResult)
+       fmt.Printf("Intent analysis result:\n%s\n\n", prettyIntentResult)
+       
+       // Batch processing example
+       inputs := []string{
+           "I am very disappointed with this service",
+           "The product is okay, but nothing special",
+           "This is the best experience I have ever had",
+       }
+       
+       // Process in parallel with concurrency of 2
+       batchResults, err := easy.ProcessBatchText(inputs, "sentiment", 2)
+       if err != nil {
+           log.Fatalf("Batch processing failed: %v", err)
+       }
+       
+       // Process results
+       for i, result := range batchResults {
+           prettyJSON, _ := easy.PrettyPrint(result)
+           fmt.Printf("Result for input %d: '%s'\n%s\n\n", i+1, inputs[i], prettyJSON)
+       }
    }
    ```
 
-3. Alternatively, try the example app:
+4. Install dependencies and run the application:
    ```bash
-   cd agentic-text/examples/easy_usage
-   go run main.go sentiment "I absolutely love this product"
+   # Install dependencies
+   go mod tidy
    
-   # Try different processors
-   go run main.go intent "I want to cancel my subscription"
+   # Run the application
+   go run main.go
    ```
 
 ## Simple Usage (Recommended)
