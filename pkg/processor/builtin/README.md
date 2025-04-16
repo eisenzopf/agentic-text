@@ -61,6 +61,13 @@ Extracts attribute values from text:
 - Confidence (confidence level)
 - Explanation (context for the extraction)
 
+### `speech_act`
+
+Identifies distinct speech acts within text:
+- Category (e.g., informational, question, request, greeting, command)
+- Complexity (rating from 1.0 to 10.0)
+- Keywords (relevant terms for each speech act)
+
 ## Importing
 
 To use these processors, simply import this package for its side effects:
