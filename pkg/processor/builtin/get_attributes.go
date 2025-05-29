@@ -1,9 +1,6 @@
 package builtin
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
 
@@ -59,49 +56,21 @@ type Attribute struct {
 	Explanation string `json:"explanation"`
 }
 
-// AttributePrompt is a prompt generator for attribute extraction
-type AttributePrompt struct{}
-
-// GeneratePrompt implements PromptGenerator interface
-func (p *AttributePrompt) GeneratePrompt(ctx context.Context, text string) (string, error) {
-	// Generate example JSON from the result struct
-	exampleResult := &AttributeResult{}
-	jsonExample := processor.GenerateJSONExample(exampleResult)
-
-	return fmt.Sprintf(`**Role:** You are an expert at extracting structured information from text.
-
-**Objective:** Analyze the provided text and extract relevant attributes and their values.
-
-**Input Text:**
-%s
-
-**Instructions:**
-1. Carefully read and interpret the Input Text.
-2. If the input appears to be JSON containing required attributes, use those as a guide to extract values.
-3. Extract any relevant attributes and their values based on the required structure below.
-4. For each attribute, provide:
-   - A field name (in snake_case)
-   - The extracted value
-   - A confidence score (0.0 to 1.0)
-   - A brief explanation
-5. Assign an overall confidence score for the extraction.
-6. Provide a brief overall explanation of how the attributes were determined.
-7. Format your entire output as a single, valid JSON object.
-8. *** IMPORTANT: Your ENTIRE response must be a single JSON object, without ANY additional text, explanation, or markdown formatting. ***
-
-**Required JSON Output Structure:**
-%s`, text, jsonExample), nil
-}
-
 // Register the processor with the registry
 func init() {
-	// Register the attribute processor using the generic processor registration with validation
-	processor.RegisterGenericProcessor(
-		"get_attributes",         // name
-		[]string{"text", "json"}, // contentTypes
-		&AttributeResult{},       // resultStruct
-		&AttributePrompt{},       // promptGenerator
-		nil,                      // no custom initialization needed
-		false,                    // No struct validation needed by default
-	)
+	processor.NewBuilder("get_attributes").
+		WithStruct(&AttributeResult{}).
+		WithContentTypes("text", "json").
+		WithRole("You are an expert at extracting structured information from text").
+		WithObjective("Analyze the provided text and extract relevant attributes and their values").
+		WithInstructions(
+			"Carefully read and interpret the Input Text",
+			"If the input appears to be JSON containing required attributes, use those as a guide to extract values",
+			"Extract any relevant attributes and their values based on the required structure",
+			"For each attribute, provide a field name (in snake_case), the extracted value, a confidence score (0.0 to 1.0), and a brief explanation",
+			"Assign an overall confidence score for the extraction",
+			"Provide a brief overall explanation of how the attributes were determined",
+			"Format your entire output as a single, valid JSON object",
+		).
+		Register()
 }

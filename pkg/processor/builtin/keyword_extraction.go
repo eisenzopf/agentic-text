@@ -1,9 +1,6 @@
 package builtin
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/eisenzopf/agentic-text/pkg/processor"
 )
 
@@ -25,45 +22,19 @@ type KeywordResult struct {
 	ProcessorType string `json:"processor_type"`
 }
 
-// KeywordPrompt is a prompt generator for keyword extraction
-type KeywordPrompt struct{}
-
-// GeneratePrompt implements PromptGenerator interface
-func (p *KeywordPrompt) GeneratePrompt(ctx context.Context, text string) (string, error) {
-	// Generate example JSON from the result struct
-	exampleResult := &KeywordResult{}
-	jsonExample := processor.GenerateJSONExample(exampleResult)
-
-	return fmt.Sprintf(`**Role:** You are an expert at extracting important keywords from text.
-
-**Objective:** Analyze the provided text and extract the most meaningful keywords.
-
-**Input Text:**
-%s
-
-**Instructions:**
-1. Carefully read and interpret the Input Text.
-2. Extract the most important keywords or key phrases that represent the main topics, following the structure below.
-3. For each keyword, provide:
-   - The keyword term
-   - A relevance score (0.0 to 1.0) indicating how central the keyword is to the content
-   - A category for the keyword (e.g., "topic", "person", "location", "concept", "organization")
-4. Format your entire output as a single, valid JSON object.
-5. *** IMPORTANT: Your ENTIRE response must be a single JSON object, without ANY additional text, explanation, or markdown formatting. ***
-
-**Required JSON Output Structure:**
-%s`, text, jsonExample), nil
-}
-
 // Register the processor with the registry
 func init() {
-	// Register the keyword processor using generic processor registration with validation
-	processor.RegisterGenericProcessor(
-		"keyword_extraction", // name
-		[]string{"text"},     // contentTypes
-		&KeywordResult{},     // resultStruct
-		&KeywordPrompt{},     // promptGenerator
-		nil,                  // no custom initialization needed
-		true,                 // Enable struct-level validation
-	)
+	processor.NewBuilder("keyword_extraction").
+		WithStruct(&KeywordResult{}).
+		WithRole("You are an expert at extracting important keywords from text").
+		WithObjective("Analyze the provided text and extract the most meaningful keywords").
+		WithInstructions(
+			"Carefully read and interpret the Input Text",
+			"Extract the most important keywords or key phrases that represent the main topics",
+			"For each keyword, provide the keyword term, relevance score (0.0 to 1.0), and category",
+			"Categories include: 'topic', 'person', 'location', 'concept', 'organization'",
+			"Format your entire output as a single, valid JSON object",
+		).
+		WithValidation().
+		Register()
 }
